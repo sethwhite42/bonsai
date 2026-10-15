@@ -1,0 +1,6 @@
+{
+  "name": "cache-panel",
+  "owner": { "name": "sethwhite42", "url": "https://github.com/sethwhite42" },
+  "description": "cache-panel: keep Claude Code sessions small with prompt-cache-aware auto-prune",
+  "plugins": [{ "name": "cache-panel", "source": "./" }]
+}
