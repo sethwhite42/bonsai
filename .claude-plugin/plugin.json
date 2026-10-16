@@ -1,12 +1,21 @@
 {
   "name": "bonsai-context",
   "displayName": "Bonsai",
-  "version": "1.2.1",
-  "description": "Keeps Claude Code sessions small: a live panel of warm sessions and their prompt-cache time left, one-click Prune (handoff file, then compact), and auto-prune of big sessions when you step away or their cache is about to expire.",
-  "author": { "name": "sethwhite42", "url": "https://github.com/sethwhite42" },
+  "version": "1.2.2",
+  "description": "Saves tokens, saves time and keeps Claude sharp. Bonsai prunes big sessions while you're away, writing a handoff first so nothing is lost.",
+  "author": {
+    "name": "sethwhite42",
+    "url": "https://github.com/sethwhite42"
+  },
   "homepage": "https://github.com/sethwhite42/bonsai",
   "repository": "https://github.com/sethwhite42/bonsai",
   "license": "MIT",
-  "keywords": ["context", "compact", "prompt-cache", "usage", "handoff"],
+  "keywords": [
+    "context",
+    "compact",
+    "prompt-cache",
+    "usage",
+    "handoff"
+  ],
   "types": "./types/index.d.ts"
 }
