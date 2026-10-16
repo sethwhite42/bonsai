@@ -1,7 +1,7 @@
 ---
 name: cachecheck
 description: Show how warm each session's prompt cache is (last active, minutes left)
-argument-hint: [--ttl 5] [--hours 72] [--all-agents] [-n 20]
+argument-hint: "[--ttl 5] [--hours 72] [--all-agents] [-n 20]"
 allowed-tools: Bash(python:*), Bash(python3:*)
 ---
 

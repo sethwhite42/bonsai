@@ -66,11 +66,32 @@ Where idle time can't be read, only the cache-expiry trigger prunes.
 
 ## What it runs and touches
 
-- **No network access.** Nothing is sent or fetched; everything stays on your machine.
-- **Reads** session transcripts under `~/.claude/projects/` (token usage, timestamps and session titles only, to size contexts and time caches).
-- **Runs** its own Python scripts from the plugin folder, plus `ioreg` (macOS) or `xprintidle` (Linux) to read idle time.
-- **Writes** only to `~/.claude/hooks-state/` and `~/.claude/handoffs/`.
-- **Acts in your sessions:** a Prune, or auto-prune once you've switched it on, submits a prune prompt in that session and then runs `/compact` there. The context nudge adds a short note to your prompt past each size threshold. It never changes Claude Code's settings or permissions.
+**Sends:** nothing. Bonsai makes no network calls; everything stays on your machine.
+
+**Reads:** session transcripts under `~/.claude/projects/`, for token usage, timestamps and session titles only, to size contexts and time caches.
+
+**Programs it runs, and why:**
+- **Python 3** (`python3`, `python` or `py`, whichever exists) to run its own scripts in the plugin's `scripts/` folder:
+  - `common.py`: finds the state folder and reads idle time.
+  - `panelview.py`: builds the panel and decides whether auto-prune should act. It runs every 30 seconds in each session where Bonsai is loaded.
+  - `cachecheck.py`: lists warm sessions. It's run by `panelview.py` and by the `/bonsai:cachecheck` skill.
+  - `prunestats.py`: estimates savings for the panel's Savings line. It's run in the background about once an hour.
+  - `ctxnudge.py`: the context-nudge hook.
+- **`ioreg`** (macOS) or **`xprintidle`** (Linux), to read how long you've been away from the keyboard. On Windows the same reading comes from the `GetLastInputInfo` system call.
+
+**The hook:** a `UserPromptSubmit` hook runs `ctxnudge.py` on each prompt you send. Below 150k tokens it does nothing. Past 150k, and every 75k after that, it adds a short note to the prompt asking Claude to judge whether much of the context is stale, and if so to ask you whether to prune. It never blocks a prompt.
+
+**Commands it runs in your session:** when a prune happens (you click Prune, or auto-prune fires once you've switched it on), Bonsai:
+1. submits a prompt telling Claude to run the `bonsai:prune` skill unattended. It asks Claude to write the handoff file without asking questions, to end with the handoff path, and says the session will be compacted next.
+2. runs `/compact` once that turn ends, with instructions to keep the handoff path in the summary and read it first.
+
+It never runs anything else in your sessions.
+
+**Writes** only to these places:
+- `~/.claude/hooks-state/`: `bonsai-prefs.json` (your panel settings), `bonsai-live-<session>.json` (a heartbeat showing Bonsai is running in that session), `bonsai-log-<session>.log` (a step log), `prune-request-<session>.json` (prune requests between sessions), `ctxnudge-<session>.json` (the nudge's last checkpoint), `prunestats.json` (the savings ledger) and `prunestats-refresh.stamp` (when savings were last updated).
+- `~/.claude/handoffs/`: the handoff files Claude writes during a prune.
+
+It never edits Claude Code's settings, permissions, instructions or any project files.
 
 ## Notes
 
