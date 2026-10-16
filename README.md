@@ -1,6 +1,6 @@
 # Bonsai
 
-**Bonsai saves compute, saves time and keeps Claude sharp, and it does the work while you're away.**
+**Bonsai saves compute, saves time and keeps Claude sharp — all while you're away — so you never have to think about compacting.**
 
 Every turn in Claude Code re-reads the whole conversation, so a session that has grown to 250k tokens costs about 250k tokens a turn, even when most of that is finished work, and all that stale context makes answers less focused. A prompt cache makes those re-reads cheap, but it expires an hour after the last reply. Once it's gone, the next message re-writes the whole context at full price.
 
