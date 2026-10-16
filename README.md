@@ -24,9 +24,7 @@ Bonsai watches every session on your machine and prunes the big ones at the righ
 
   ![The context nudge](docs/nudge.png)
 
-- **Two skills:**
-  - `/bonsai-context:prune [task-name]` writes the handoff and gives you the `/compact` line to run.
-  - `/bonsai-context:cachecheck` prints cache warmth for every session.
+- **A prune skill:** `/bonsai-context:prune [task-name]` writes the handoff and gives you the `/compact` line to run.
 
 ### What "Prune" does
 
@@ -74,7 +72,7 @@ Where idle time can't be read, only the cache-expiry trigger prunes.
 - **Python 3** (`python3`, `python` or `py`, whichever exists) to run its own scripts in the plugin's `scripts/` folder:
   - `common.py`: finds the state folder and reads idle time.
   - `panelview.py`: builds the panel and decides whether auto-prune should act. It runs every 30 seconds in each session where Bonsai is loaded.
-  - `cachecheck.py`: lists warm sessions. It's run by `panelview.py` and by the `/bonsai-context:cachecheck` skill.
+  - `cachecheck.py`: lists warm sessions. It's run by `panelview.py`, and by the prune skill to see which subagents are still warm.
   - `prunestats.py`: estimates savings for the panel's Savings line. It's run in the background about once an hour.
   - `ctxnudge.py`: the context-nudge hook.
 - **`ioreg`** (macOS) or **`xprintidle`** (Linux), to read how long you've been away from the keyboard. On Windows the same reading comes from the `GetLastInputInfo` system call.
