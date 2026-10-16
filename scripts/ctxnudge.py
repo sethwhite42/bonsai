@@ -64,7 +64,7 @@ def main():
     except Exception:
         auto = False
     off_note = "" if auto else (
-        " End the question with a new line reading exactly '*Auto-prune is OFF' "
+        " End the question with a new line reading exactly 'Auto-prune is OFF' "
         "(it can be turned on in the Cache panel).")
     print(
         f"[context check: this session's context is about {ctx // 1000}k tokens, "
