@@ -64,7 +64,7 @@ Where idle time can't be read, only the cache-expiry trigger prunes.
 ## What it runs and touches
 
 - **No network access.** Nothing is sent or fetched; everything stays on your machine.
-- **Reads** session transcripts under `~/.claude/projects/` (token usage and timestamps only, to size contexts and time caches).
+- **Reads** session transcripts under `~/.claude/projects/` (token usage, timestamps and session titles only, to size contexts and time caches).
 - **Runs** its own Python scripts from the plugin folder, plus `ioreg` (macOS) or `xprintidle` (Linux) to read idle time.
 - **Writes** only to `~/.claude/hooks-state/` and `~/.claude/handoffs/`.
 - **Acts in your sessions:** a Prune, or auto-prune once you've switched it on, submits a prune prompt in that session and then runs `/compact` there. The context nudge adds a short note to your prompt past each size threshold. It never changes Claude Code's settings or permissions.
