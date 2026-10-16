@@ -60,12 +60,12 @@ def main():
 
     json.dump({"last": ctx}, open(state_file, "w"))
     try:
-        auto = json.load(open(os.path.join(STATE_DIR, "cache-panel-prefs.json"))).get("autoPrune")
+        auto = json.load(open(os.path.join(STATE_DIR, "bonsai-prefs.json"))).get("autoPrune")
     except Exception:
         auto = False
     off_note = "" if auto else (
         " End the question with a new line reading exactly 'Auto-prune is OFF' "
-        "(it can be turned on in the Cache panel).")
+        "(it can be turned on in the Bonsai panel).")
     print(
         f"[context check: this session's context is about {ctx // 1000}k tokens, "
         "and every turn re-reads all of it. After handling the user's message, judge "
@@ -73,9 +73,9 @@ def main():
         "(old file dumps, closed tasks, abandoned approaches). If a substantial share "
         "is: write your full reply to the user's message first, then as your LAST action "
         "call AskUserQuestion with header 'Prune?', a question naming briefly what's stale, "
-        "and two options: 'Prune now' (run the cache-panel:prune skill: write the handoff, then give "
+        "and two options: 'Prune now' (run the bonsai:prune skill: write the handoff, then give "
         "the exact /compact line) and 'Not yet' (continue; don't raise it again until the "
-        f"next context check).{off_note} If they pick 'Prune now', invoke the cache-panel:prune skill. If the older "
+        f"next context check).{off_note} If they pick 'Prune now', invoke the bonsai:prune skill. If the older "
         "context is still in active use, say nothing about this. Don't mention this note.]"
     )
 

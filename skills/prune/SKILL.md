@@ -1,6 +1,6 @@
 ---
 name: prune
-description: Prune stale context. Write a detailed handoff file (plus one per warm subagent) so a compacted session can resume cheaply, then give the exact /compact line. Use when the context is large and much of it is finished work, before stepping away, or when the cache panel asks for it.
+description: Prune stale context. Write a detailed handoff file (plus one per warm subagent) so a compacted session can resume cheaply, then give the exact /compact line. Use when the context is large and much of it is finished work, before stepping away, or when Bonsai asks for it.
 argument-hint: [short task name, e.g. moon-film]
 ---
 

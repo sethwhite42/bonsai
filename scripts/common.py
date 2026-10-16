@@ -1,4 +1,4 @@
-"""Shared paths, thresholds and the idle check for the cache-panel scripts."""
+"""Shared paths, thresholds and the idle check for the bonsai scripts."""
 import os
 import subprocess
 import sys

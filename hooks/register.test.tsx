@@ -6,7 +6,7 @@ import { test, expect } from 'claude-code/testing'
 test('Cache chip draws beside the mode labels', async ($, on) => {
   on('ui.render', async () => null) // stands in for the engine's own drawing
   for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ plugin: 'cache-panel', surface, component: 'SessionMode',
+    const ui = await $.ui.mount({ plugin: 'bonsai', surface, component: 'SessionMode',
       props: { modes: ['bypass permissions'] } })
     expect(await ui.find({ type: 'Text', text: /bypass permissions/ })).toBeDefined()
     expect(await ui.find({ key: 'cache-toggle' })).toBeDefined()

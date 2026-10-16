@@ -8,7 +8,7 @@ import type { Block, Meter, Part } from '../types'
 // refresh, no plugin reload). Change this file only for new block kinds or the
 // prune mechanics.
 
-const PANE = 'cache-panel'
+const PANE = 'bonsai'
 const SCAN_MS = 30_000
 const POLL_MS = 5_000
 // Set up by setup(): the plugin's folder, a Python that runs, and the state folder
@@ -34,10 +34,10 @@ async function setup($: Api): Promise<boolean> {
 const isReady = ($: Api) => (ready ??= setup($))
 
 // one log per session: a shared file lost lines when many sessions wrote at once (e.g. on restart)
-const logPath = (sid8: string) => `${STATE_DIR}/cache-panel-log-${sid8}.log`
+const logPath = (sid8: string) => `${STATE_DIR}/bonsai-log-${sid8}.log`
 
 const PRUNE_PROMPT =
-  'Run the cache-panel:prune skill now, unattended: the cache panel is pruning this session (I clicked ' +
+  'Run the bonsai:prune skill now, unattended: Bonsai is pruning this session (I clicked ' +
   'Prune, or auto-prune fired because I stepped away from the PC or its cache was about to ' +
   'expire) and I am ' +
   'not watching it. Pick the task name yourself. Write the main handoff and ' +
@@ -46,14 +46,14 @@ const PRUNE_PROMPT =
   'your reply with the handoff file path on its own line. The session will be compacted ' +
   'automatically right after this turn.'
 const COMPACT_INSTRUCTIONS =
-  'This session was pruned from the cache panel. The handoff file named at the end of ' +
+  'This session was pruned by Bonsai. The handoff file named at the end of ' +
   'the last reply holds the full state: keep its exact path in the summary and say to ' +
   'read it first. Resume subagent work with new subagents briefed from their handoff files.'
 
-const view = atom({ plugin: 'cache-panel', key: 'view' } as const, [])
-const layout = atom({ plugin: 'cache-panel', key: 'layout' } as const, {})
-const footer = atom({ plugin: 'cache-panel', key: 'footer' } as const, {})
-const armed = atom({ plugin: 'cache-panel', key: 'armed' } as const, null)
+const view = atom({ plugin: 'bonsai', key: 'view' } as const, [])
+const layout = atom({ plugin: 'bonsai', key: 'layout' } as const, {})
+const footer = atom({ plugin: 'bonsai', key: 'footer' } as const, {})
+const armed = atom({ plugin: 'bonsai', key: 'armed' } as const, null)
 
 let phase: 'idle' | 'running' = 'idle'
 let footerLogged = false
@@ -62,13 +62,13 @@ let phaseAt = 0 // a prune that never reached turn.complete must not block later
 const STUCK_MS = 15 * 60_000
 
 const reqPath = (sid: string) => `${STATE_DIR}/prune-request-${sid}.json`
-const livePath = (sid: string) => `${STATE_DIR}/cache-panel-live-${sid}.json`
-const prefsPath = () => `${STATE_DIR}/cache-panel-prefs.json` // shared toggles, e.g. { autoPrune: true }
+const livePath = (sid: string) => `${STATE_DIR}/bonsai-live-${sid}.json`
+const prefsPath = () => `${STATE_DIR}/bonsai-prefs.json` // shared toggles, e.g. { autoPrune: true }
 
-// The full panel opens on demand as a pop-up (the footer Cache button or /cache-panel); Esc closes it.
+// The full panel opens on demand as a pop-up (the footer Bonsai button or /bonsai); Esc closes it.
 // columns: the width it asks for when docked (a width the person dragged wins)
 const PANE_COLS = 72
-const openPanel = ($: Api) => $.ui.open({ id: PANE, title: 'Cache', focus: true, closeOnEscape: true, columns: PANE_COLS })
+const openPanel = ($: Api) => $.ui.open({ id: PANE, title: 'Bonsai', focus: true, closeOnEscape: true, columns: PANE_COLS })
 async function togglePanel($: Api) {
   if ((await $.ui.panes()).some(p => p.id === PANE)) await $.ui.close({ id: PANE })
   else await openPanel($)
@@ -98,7 +98,7 @@ async function refresh($: Api) {
   let blocks: Block[]
   if (!(await isReady($))) {
     await update($, view, () => [{ kind: 'line', parts: [
-      { text: 'cache-panel needs Python 3 on the PATH (python3, python or py).', color: 'error' }] }])
+      { text: 'Bonsai needs Python 3 on the PATH (python3, python or py).', color: 'error' }] }])
     return
   }
   try {
@@ -159,7 +159,7 @@ async function poll($: Api) {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'cache-panel', description: 'Open the cache-warmth panel (Esc closes it)' })
+    await $.command.register({ name: 'bonsai', description: 'Open the Bonsai panel (Esc closes it)' })
     void note($, `loaded ${$.plugin.name}`)
     void refresh($)
     void poll($)
@@ -168,10 +168,10 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'cache-panel' }, async $ => {
+  on('command.run', { command: 'bonsai' }, async $ => {
     await refresh($)
     await openPanel($)
-    return { text: 'Cache panel opened.' }
+    return { text: 'Bonsai panel opened.' }
   })
 
   on('prompt.submit', async ($, e, next) => {
@@ -202,7 +202,7 @@ export const register: Register = on => {
         {/* a Button takes its label as a string (a styled child is refused); the desktop
             draws it as its own chip either way */}
         <Box key="cache-hit">
-          <Button key="cache-toggle" plain label={f.label ?? 'Cache'} onPress={() => togglePanel($)} />
+          <Button key="cache-toggle" plain label={f.label ?? 'Bonsai'} onPress={() => togglePanel($)} />
         </Box>
       </Box>
     )

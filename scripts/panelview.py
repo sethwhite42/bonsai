@@ -1,4 +1,4 @@
-"""panelview - what the cache-panel plugin draws, as JSON.
+"""panelview - what the bonsai plugin draws, as JSON.
 
 The plugin's hooks module (hooks/register.tsx) is a generic drawer: it runs
 `python panelview.py --self <session-id> --blocks 2` every 30 s and after each turn,
@@ -20,7 +20,7 @@ Output: {"blocks": [Block, ...], "layout": {}, "footer": {}, "autoPruneSelf": bo
            "sub": [[Part], ...], "toggle"?: {"label", "pref", "value"}}
           (toggle = a small dim button before the action, e.g. Exclude/Include)
         | {"kind": "button", "label", "pref": <key>, "value": <json>, "parts"?: [Part]}
-          (pressing it merges {pref: value} into hooks-state/cache-panel-prefs.json)
+          (pressing it merges {pref: value} into hooks-state/bonsai-prefs.json)
   "autoPruneSelf": true when THIS session should prune itself now.
   Part  = {"text", "color"?, "bold"?, "dim"?}
   Colors are theme names: warning, success, error, suggestion, subtle, claude ...
@@ -45,7 +45,7 @@ BAR_W = 10                            # cache-left bar width in cells
 # The Cache button in the prompt footer (keys: label, color, dim, box, hitBox).
 # The terminal honors them; the desktop app draws it as its own gray chip regardless (tested 0.5.7).
 # The chip has no inner padding; padding the label with en spaces didn't help (tried 2026-10-15).
-FOOTER = {"label": "Cache"}
+FOOTER = {"label": "Bonsai"}
 
 
 def P(text, **kw):
@@ -88,7 +88,7 @@ def next_nudge(sid, ctx):
 
 def last_log_line(sid):
     try:
-        with open(os.path.join(STATE, f"cache-panel-log-{sid[:8]}.log"), encoding="utf-8") as f:
+        with open(os.path.join(STATE, f"bonsai-log-{sid[:8]}.log"), encoding="utf-8") as f:
             lines = [l.rstrip() for l in f if f" {sid[:8]} " in l and "footer drawn" not in l]
         if not lines:
             return None
@@ -180,7 +180,7 @@ def main():
                        capture_output=True, text=True, timeout=25)
     data = json.loads(r.stdout)
     ttl, sessions = data["ttl"], data["sessions"]
-    prefs = read_json(os.path.join(STATE, "cache-panel-prefs.json")) or {}
+    prefs = read_json(os.path.join(STATE, "bonsai-prefs.json")) or {}
     auto = bool(prefs.get("autoPrune"))
     # thresholds the person picks in the panel (defaults are the constants above)
     global AUTO_MIN, AUTO_CTX
@@ -289,7 +289,7 @@ def main():
         cold = left < cut
         mine = s["sid"] == a.me
         req = read_json(os.path.join(STATE, f"prune-request-{s['sid']}.json"))
-        beat = read_json(os.path.join(STATE, f"cache-panel-live-{s['sid']}.json"))
+        beat = read_json(os.path.join(STATE, f"bonsai-live-{s['sid']}.json"))
         live = mine or (beat and now - beat.get("at", 0) / 1000 < LIVE_S)
         action = ("app-managed" if s.get("external") else
                   "pruning" if req and not req.get("handled") else ("prune" if live else "not open"))

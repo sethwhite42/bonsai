@@ -19,6 +19,6 @@ export type Block =
 
 declare module 'claude-code' {
   interface PluginState {
-    'cache-panel': { view: Block[]; layout: Record<string, number>; footer: Record<string, any>; armed: string | null }
+    'bonsai': { view: Block[]; layout: Record<string, number>; footer: Record<string, any>; armed: string | null }
   }
 }

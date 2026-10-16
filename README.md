@@ -1,16 +1,16 @@
-# cache-panel
+# Bonsai
 
 **Keeps Claude Code sessions small, automatically.**
 
 Every turn in Claude Code re-reads the whole conversation, so a session that has grown to 250k tokens costs about 250k tokens a turn, even when most of that is finished work. A prompt cache makes those re-reads cheap, but it expires an hour after the last reply. Once it's gone, the next message re-writes the whole context at full price.
 
-cache-panel watches every session on your machine and prunes the big ones at the right moment. When you step away from the PC, or a session's cache is about to expire, it writes a detailed handoff file and then compacts the session. When you come back, the session resumes from the handoff instead of from a 250k-token transcript.
+Bonsai watches every session on your machine and prunes the big ones at the right moment. When you step away from the PC, or a session's cache is about to expire, it writes a detailed handoff file and then compacts the session. When you come back, the session resumes from the handoff instead of from a 250k-token transcript.
 
-![The cache panel](docs/panel.png)
+![The Bonsai panel](docs/panel.png)
 
 ## What you get
 
-- **A Cache button** in the prompt footer, which opens the panel (or use `/cache-panel`).
+- **A Bonsai button** in the prompt footer, which opens the panel (or use `/bonsai`).
 - **Warm sessions:** every session whose prompt cache is still alive, with minutes left, context size, and a **Prune** button. Sessions about to go cold are flagged.
 - **Auto-prune** (off until you switch it on in the panel): big sessions (over 150k by default) hand off and compact on their own when:
   - you've been away from the keyboard for 10 minutes and the session hasn't replied for 10 minutes, so the break gets used for housekeeping (both clocks run together, so in practice it fires 10–20 minutes after the last reply), or
@@ -22,8 +22,8 @@ cache-panel watches every session on your machine and prunes the big ones at the
 - **Savings:** an estimate of tokens saved by pruning over the last 30 days. It's measured in input-token equivalents, against never compacting at all, so read it as an upper bound.
 - **A context nudge:** past 150k tokens, and every 75k after that, Claude is asked to judge whether much of the context is stale work. If it is, Claude offers to prune. If the old context is still in use, it says nothing.
 - **Two skills:**
-  - `/cache-panel:prune [task-name]` writes the handoff and gives you the `/compact` line to run.
-  - `/cache-panel:cachecheck` prints cache warmth for every session.
+  - `/bonsai:prune [task-name]` writes the handoff and gives you the `/compact` line to run.
+  - `/bonsai:cachecheck` prints cache warmth for every session.
 
 ### What "Prune" does
 
@@ -42,7 +42,7 @@ That's one person's workload, not a benchmark. The panel's **Savings** line runs
 In a Claude Code **terminal** session:
 
 ```
-/plugin install cache-panel --marketplace sethwhite42/cache-panel
+/plugin install bonsai --marketplace sethwhite42/bonsai
 ```
 
 Answer `y` to add the marketplace, then pick a scope (user scope puts it in every session). The plugin also loads in the Claude desktop app's Code tab once it's installed. The install command itself only works from a terminal.

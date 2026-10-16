@@ -1,10 +1,10 @@
 {
-  "name": "cache-panel",
-  "version": "1.0.2",
+  "name": "bonsai",
+  "version": "1.1.0",
   "description": "Keeps Claude Code sessions small: a live panel of warm sessions and their prompt-cache time left, one-click Prune (handoff file, then compact), and auto-prune of big sessions when you step away or their cache is about to expire.",
   "author": { "name": "sethwhite42", "url": "https://github.com/sethwhite42" },
-  "homepage": "https://github.com/sethwhite42/cache-panel",
-  "repository": "https://github.com/sethwhite42/cache-panel",
+  "homepage": "https://github.com/sethwhite42/bonsai",
+  "repository": "https://github.com/sethwhite42/bonsai",
   "license": "MIT",
   "keywords": ["context", "compact", "prompt-cache", "usage", "handoff"],
   "types": "./types/index.d.ts"

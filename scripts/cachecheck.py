@@ -123,7 +123,7 @@ sessions = [p for p in glob.glob(os.path.join(ROOT, "*", "*.jsonl"))
 last = {p: last_call(p) for p in sessions}
 sessions.sort(key=last.get, reverse=True)
 
-if a.json:   # for the cache-panel mod: warm sessions only
+if a.json:   # for the bonsai mod: warm sessions only
     out = []
     for p in sessions:
         left = a.ttl - (now - last[p]) / 60
