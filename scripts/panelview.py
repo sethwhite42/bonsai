@@ -18,7 +18,7 @@ Output: {"blocks": [Block, ...], "layout": {}, "footer": {}, "autoPruneSelf": bo
         | {"kind": "session", "sid", "parts": [Part], "right": [Part],
            "action": "prune" | "pruning" | "not open" | "",
            "sub": [[Part], ...], "toggle"?: {"label", "pref", "value"}}
-          (toggle = a small dim button before the action, e.g. Exclude/Include)
+          (toggle = a small dim button before the action, e.g. ✕ exclude / ↺ include)
         | {"kind": "button", "label", "pref": <key>, "value": <json>, "parts"?: [Part]}
           (pressing it merges {pref: value} into hooks-state/bonsai-prefs.json)
   "autoPruneSelf": true when THIS session should prune itself now.
@@ -304,7 +304,7 @@ def main():
             label.append(P("  external app", dim=True))
         out = s["sid"] in excluded
         toggle = None if s.get("external") else (
-            {"label": "Include", "pref": "excluded", "value": [x for x in excluded if x != s["sid"]]} if out
+            {"label": "↺", "pref": "excluded", "value": [x for x in excluded if x != s["sid"]]} if out
             else {"label": "✕", "pref": "excluded", "value": excluded + [s["sid"]]})
         return {"kind": "session", "sid": s["sid"], "toggle": toggle,
                 "parts": [P(short(s["title"], TITLE_CH), bold=mine, wrap="truncate-end")],

@@ -17,7 +17,7 @@ Bonsai watches every session on your machine and prunes the big ones at the righ
   - their cache is down to its last 10 minutes and about to expire.
 
   All three thresholds are dropdowns in the panel. Auto-prune only acts on a session while no turn is running in it.
-- **Exclude:** the ✕ on a row keeps that session out of auto-prune, for a disposable giant task you'd rather not have compacted. **Include** puts it back. Manual Prune still works on excluded sessions.
+- **Exclude:** the ✕ on a row keeps that session out of auto-prune, for a disposable giant task you'd rather not have compacted. the **↺** on an excluded row puts it back. Manual Prune still works on excluded sessions.
 - **This session:** context size against the next nudge, and the cache time left.
 - **Savings:** an estimate of tokens saved by pruning over the last 30 days. It's measured in input-token equivalents, against never compacting at all, so read it as an upper bound.
 - **A context nudge:** past 150k tokens, and every 75k after that, Claude is asked to judge whether much of the context is stale work. If it is, Claude offers to prune. If the old context is still in use, it says nothing.
