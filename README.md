@@ -12,8 +12,8 @@ cache-panel watches every session on your machine and prunes the big ones at the
 
 - **A Cache button** in the prompt footer, which opens the panel (or use `/cache-panel`).
 - **Warm sessions:** every session whose prompt cache is still alive, with minutes left, context size, and a **Prune** button. Sessions about to go cold are flagged.
-- **Auto-prune:** big sessions (over 150k by default) hand off and compact on their own when:
-  - you've been away from the keyboard for 10 minutes, so the break gets used for housekeeping, or
+- **Auto-prune** (off until you switch it on in the panel): big sessions (over 150k by default) hand off and compact on their own when:
+  - you've been away from the keyboard for 10 minutes and the session hasn't replied for 10 minutes, so the break gets used for housekeeping (both clocks run together, so in practice it fires 10–20 minutes after the last reply), or
   - their cache is down to its last 10 minutes and about to expire.
 
   All three thresholds are dropdowns in the panel. Auto-prune only acts on a session while no turn is running in it.
@@ -30,6 +30,12 @@ cache-panel watches every session on your machine and prunes the big ones at the
 1. Claude writes `~/.claude/handoffs/<task>.md`. It holds the goal, the current state, decisions and why, exact values, and next steps, in enough detail that a fresh model can continue without re-reading files.
 2. For each subagent: if its cache is still warm and it holds unfinished work, Claude asks it to write its own handoff. Cold subagents are never woken, because waking one re-sends its whole context at full price.
 3. The session is compacted, with instructions to read the handoff first.
+
+## Results
+
+Over two months of the author's own heavy use (26 early compactions, by hand at first and then with this plugin, on sessions of 90k–930k tokens), compacting early saved an estimated **58.8 million input tokens**: 46% of what those stretches of conversation would have cost without compacting, after subtracting the cost of the compaction and the handoff. The biggest wins were long sessions pruned at 400k+, at 3–14 million tokens each. Small prunes of sessions under about 170k, or prunes just before a session ended, sometimes cost slightly more than they saved.
+
+That's one person's workload, not a benchmark. The panel's **Savings** line runs the same estimate on yours.
 
 ## Install
 
