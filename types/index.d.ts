@@ -19,6 +19,6 @@ export type Block =
 
 declare module 'claude-code' {
   interface PluginState {
-    'bonsai': { view: Block[]; layout: Record<string, number>; footer: Record<string, any>; armed: string | null }
+    'bonsai-context': { view: Block[]; layout: Record<string, number>; footer: Record<string, any>; armed: string | null }
   }
 }

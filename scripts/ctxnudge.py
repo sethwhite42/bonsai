@@ -73,9 +73,9 @@ def main():
         "(old file dumps, closed tasks, abandoned approaches). If a substantial share "
         "is: write your full reply to the user's message first, then as your LAST action "
         "call AskUserQuestion with header 'Prune?', a question naming briefly what's stale, "
-        "and two options: 'Prune now' (run the bonsai:prune skill: write the handoff, then give "
+        "and two options: 'Prune now' (run the bonsai-context:prune skill: write the handoff, then give "
         "the exact /compact line) and 'Not yet' (continue; don't raise it again until the "
-        f"next context check).{off_note} If they pick 'Prune now', invoke the bonsai:prune skill. If the older "
+        f"next context check).{off_note} If they pick 'Prune now', invoke the bonsai-context:prune skill. If the older "
         "context is still in active use, say nothing about this. Don't mention this note.]"
     )
 

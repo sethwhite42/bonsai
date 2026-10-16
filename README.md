@@ -25,8 +25,8 @@ Bonsai watches every session on your machine and prunes the big ones at the righ
   ![The context nudge](docs/nudge.png)
 
 - **Two skills:**
-  - `/bonsai:prune [task-name]` writes the handoff and gives you the `/compact` line to run.
-  - `/bonsai:cachecheck` prints cache warmth for every session.
+  - `/bonsai-context:prune [task-name]` writes the handoff and gives you the `/compact` line to run.
+  - `/bonsai-context:cachecheck` prints cache warmth for every session.
 
 ### What "Prune" does
 
@@ -45,7 +45,7 @@ That's one person's workload, not a benchmark. The panel's **Savings** line runs
 In a Claude Code **terminal** session:
 
 ```
-/plugin install bonsai --marketplace sethwhite42/bonsai
+/plugin install bonsai-context --marketplace sethwhite42/bonsai
 ```
 
 Answer `y` to add the marketplace, then pick a scope (user scope puts it in every session). The plugin also loads in the Claude desktop app's Code tab once it's installed. The install command itself only works from a terminal.
@@ -74,7 +74,7 @@ Where idle time can't be read, only the cache-expiry trigger prunes.
 - **Python 3** (`python3`, `python` or `py`, whichever exists) to run its own scripts in the plugin's `scripts/` folder:
   - `common.py`: finds the state folder and reads idle time.
   - `panelview.py`: builds the panel and decides whether auto-prune should act. It runs every 30 seconds in each session where Bonsai is loaded.
-  - `cachecheck.py`: lists warm sessions. It's run by `panelview.py` and by the `/bonsai:cachecheck` skill.
+  - `cachecheck.py`: lists warm sessions. It's run by `panelview.py` and by the `/bonsai-context:cachecheck` skill.
   - `prunestats.py`: estimates savings for the panel's Savings line. It's run in the background about once an hour.
   - `ctxnudge.py`: the context-nudge hook.
 - **`ioreg`** (macOS) or **`xprintidle`** (Linux), to read how long you've been away from the keyboard. On Windows the same reading comes from the `GetLastInputInfo` system call.
@@ -82,7 +82,7 @@ Where idle time can't be read, only the cache-expiry trigger prunes.
 **The hook:** a `UserPromptSubmit` hook runs `ctxnudge.py` on each prompt you send. Below 150k tokens it does nothing. Past 150k, and every 75k after that, it adds a short note to the prompt asking Claude to judge whether much of the context is stale, and if so to ask you whether to prune. It never blocks a prompt.
 
 **Commands it runs in your session:** when a prune happens (you click Prune, or auto-prune fires once you've switched it on), Bonsai:
-1. submits a prompt telling Claude to run the `bonsai:prune` skill unattended. It asks Claude to write the handoff file without asking questions, to end with the handoff path, and says the session will be compacted next.
+1. submits a prompt telling Claude to run the `bonsai-context:prune` skill unattended. It asks Claude to write the handoff file without asking questions, to end with the handoff path, and says the session will be compacted next.
 2. runs `/compact` once that turn ends, with instructions to keep the handoff path in the summary and read it first.
 
 It never runs anything else in your sessions.

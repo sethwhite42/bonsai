@@ -37,7 +37,7 @@ const isReady = ($: Api) => (ready ??= setup($))
 const logPath = (sid8: string) => `${STATE_DIR}/bonsai-log-${sid8}.log`
 
 const PRUNE_PROMPT =
-  'Run the bonsai:prune skill now, unattended: Bonsai is pruning this session (I clicked ' +
+  'Run the bonsai-context:prune skill now, unattended: Bonsai is pruning this session (I clicked ' +
   'Prune, or auto-prune fired because I stepped away from the PC or its cache was about to ' +
   'expire) and I am ' +
   'not watching it. Pick the task name yourself. Write the main handoff and ' +
@@ -50,10 +50,10 @@ const COMPACT_INSTRUCTIONS =
   'the last reply holds the full state: keep its exact path in the summary and say to ' +
   'read it first. Resume subagent work with new subagents briefed from their handoff files.'
 
-const view = atom({ plugin: 'bonsai', key: 'view' } as const, [])
-const layout = atom({ plugin: 'bonsai', key: 'layout' } as const, {})
-const footer = atom({ plugin: 'bonsai', key: 'footer' } as const, {})
-const armed = atom({ plugin: 'bonsai', key: 'armed' } as const, null)
+const view = atom({ plugin: 'bonsai-context', key: 'view' } as const, [])
+const layout = atom({ plugin: 'bonsai-context', key: 'layout' } as const, {})
+const footer = atom({ plugin: 'bonsai-context', key: 'footer' } as const, {})
+const armed = atom({ plugin: 'bonsai-context', key: 'armed' } as const, null)
 
 let phase: 'idle' | 'running' = 'idle'
 let footerLogged = false

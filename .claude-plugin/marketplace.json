@@ -2,5 +2,5 @@
   "name": "bonsai",
   "owner": { "name": "sethwhite42", "url": "https://github.com/sethwhite42" },
   "description": "Bonsai: keep Claude Code sessions small with prompt-cache-aware auto-prune",
-  "plugins": [{ "name": "bonsai", "source": "./" }]
+  "plugins": [{ "name": "bonsai-context", "source": "./" }]
 }
