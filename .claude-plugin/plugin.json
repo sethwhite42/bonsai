@@ -1,6 +1,6 @@
 {
   "name": "cache-panel",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Keeps Claude Code sessions small: a live panel of warm sessions and their prompt-cache time left, one-click Prune (handoff file, then compact), and auto-prune of big sessions when you step away or their cache is about to expire.",
   "author": { "name": "sethwhite42", "url": "https://github.com/sethwhite42" },
   "homepage": "https://github.com/sethwhite42/cache-panel",
