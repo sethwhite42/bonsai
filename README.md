@@ -21,6 +21,9 @@ Bonsai watches every session on your machine and prunes the big ones at the righ
 - **This session:** context size against the next nudge, and the cache time left.
 - **Savings:** an estimate of tokens saved by pruning over the last 30 days. It's measured in input-token equivalents, against never compacting at all, so read it as an upper bound.
 - **A context nudge:** past 150k tokens, and every 75k after that, Claude is asked to judge whether much of the context is stale work. If it is, Claude offers to prune. If the old context is still in use, it says nothing.
+
+  ![The context nudge](docs/nudge.png)
+
 - **Two skills:**
   - `/bonsai:prune [task-name]` writes the handoff and gives you the `/compact` line to run.
   - `/bonsai:cachecheck` prints cache warmth for every session.
