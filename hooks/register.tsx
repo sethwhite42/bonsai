@@ -49,6 +49,30 @@ const COMPACT_INSTRUCTIONS =
   'This session was pruned by Bonsai. The handoff file named at the end of ' +
   'the last reply holds the full state: keep its exact path in the summary and say to ' +
   'read it first. Resume subagent work with new subagents briefed from their handoff files.'
+// The lean prune: no handoff turn, the compact's summary IS the handoff (scripts/leanprune.py
+// copies it to the file afterwards). Same standard as skills/prune/SKILL.md step 1.
+const leanInstructions = (dir: string) =>
+  'Bonsai is pruning this session in one step: this summary IS the handoff. Bonsai saves it word ' +
+  'for word to a file, and a fresh model resumes from it, so write it to the handoff standard, not as ' +
+  'a short recap.\n' +
+  `The first line must be exactly \`Handoff: ${dir}/<task>.md\`, where <task> is a short kebab-case name ` +
+  'for the current workstream (reuse the name of a handoff file this session already wrote, if there ' +
+  'is one). The second line: "Read this summary first; it is also saved at that path."\n' +
+  'Level of detail: err toward MORE. The expensive failure after a compact is the next model ' +
+  're-reading files and re-running searches to re-learn what is known now; reading a long summary ' +
+  'once costs far less. Test every section: could a fresh model start the next step without opening ' +
+  'a file just to re-orient? Write down what was learned from the files, not only what was done: ' +
+  'the relevant functions and classes with path:line, how the pieces connect, data shapes and ' +
+  'formats, gotchas hit, which files matter and which turned out irrelevant. Quote short exact ' +
+  'snippets, values and error messages rather than paraphrasing. No length cap. Cut only narration ' +
+  '(the order things happened in) and anything already in memory files or CLAUDE.md.\n' +
+  'Use these sections: Goal (two or three lines); Current state (done, working, half-finished, exact ' +
+  'paths); Decisions and why (including approaches tried and rejected, and why); Exact values ' +
+  '(settings, parameters, prompt text, IDs, commands, numbers that took effort to find, verbatim); ' +
+  'The user\'s preferences and don\'ts; Open questions waiting on the user; Mid-conversation (what ' +
+  'was being discussed at the end, with the user\'s last messages quoted); Next steps (ordered, ' +
+  'concrete); Subagents (one line each: what it did and whether it finished; none will be resumed, ' +
+  'a new subagent briefed from this summary picks up unfinished work).'
 
 const view = atom({ plugin: 'bonsai-context', key: 'view' } as const, [])
 const layout = atom({ plugin: 'bonsai-context', key: 'layout' } as const, {})
@@ -63,6 +87,7 @@ let footerLogged = false
 let nudgePruned = false // Prune pressed on the nudge bar
 let busy = false // a turn is running in this session
 let phaseAt = 0 // a prune that never reached turn.complete must not block later ones
+let leaning = false // a lean prune (compact only) underway
 const STUCK_MS = 15 * 60_000
 
 const reqPath = (sid: string) => `${STATE_DIR}/prune-request-${sid}.json`
@@ -116,9 +141,9 @@ async function refresh($: Api) {
     await update($, footer, () => d.footer ?? {})
     // the bar stays down from a Prune press until the compact brings the context under the checkpoint
     if (!d.nudge) nudgePruned = false
-    await update($, nudge, () => (nudgePruned || phase === 'running' ? null : d.nudge ?? null))
+    await update($, nudge, () => (nudgePruned || phase === 'running' || leaning ? null : d.nudge ?? null))
     // panelview.py decides WHEN (big context, and the PC idle or the cache nearly out); we add "no turn running"
-    if (d.autoPruneSelf && !busy && phase === 'idle') {
+    if (d.autoPruneSelf && !busy && phase === 'idle' && !leaning) {
       await $.fs.write(reqPath(selfId), JSON.stringify({ at: await $.clock.now(), auto: true }))
       await note($, `auto-prune (${d.autoReason || 'due'}); requesting prune`)
       void poll($)
@@ -129,25 +154,58 @@ async function refresh($: Api) {
   await update($, view, () => blocks)
 }
 
-async function compact($: Api) {
+async function compact($: Api, instructions = COMPACT_INSTRUCTIONS) {
   await note($, 'compacting')
   await update($, pruning, () => 'compacting')
-  try { await doCompact($) } finally { await update($, pruning, () => null) }
+  try { return await doCompact($, instructions) } finally { await update($, pruning, () => null) }
 }
 
-async function doCompact($: Api) {
+// true when the compact ran
+async function doCompact($: Api, instructions: string): Promise<boolean> {
   try {
-    const r = await $.session.compact({ instructions: COMPACT_INSTRUCTIONS })
+    const r = await $.session.compact({ instructions })
     await note($, r?.skip ? 'compact skipped by a hook; run /compact yourself' : 'compacted')
+    return !r?.skip
   } catch (err) {
     // headless sessions (the desktop app) have no $.session.compact: run /compact as if typed
     await note($, 'session.compact unavailable here; running /compact')
     try {
-      await $.command.run({ command: 'compact', args: COMPACT_INSTRUCTIONS })
+      await $.command.run({ command: 'compact', args: instructions })
       await note($, 'compacted (via /compact)')
+      return true
     } catch (err2) {
       await note($, `compact failed: ${String(err2)}; run /compact yourself`)
+      return false
     }
+  }
+}
+
+const wait = ($: Api, ms: number) => new Promise<void>(res => $.clock.after(ms, () => res()))
+
+// One step: compact with the handoff standard as the instructions, then copy the summary to the
+// handoff file. The summary can land in the transcript a moment after the compact resolves.
+async function leanPrune($: Api, selfId: string, dir: string) {
+  leaning = true
+  const since = await $.clock.now()
+  $.ui.toast('Bonsai: pruning. Compacting, with the handoff written in the same step.')
+  try {
+    if (!(await compact($, leanInstructions(dir)))) return
+    for (let i = 0; i < 6; i++) {
+      const r = await $.process.run([PY, script('leanprune.py'), 'save', '--session', selfId, '--since', String(since)],
+        { timeoutMs: 20_000 })
+      const d = JSON.parse(r.stdout)
+      if (d.path) {
+        await note($, `lean prune: handoff saved to ${d.path} (${d.chars} chars)`)
+        $.ui.toast(`Bonsai: pruned. Handoff saved to ${d.path}`)
+        return
+      }
+      if (i === 5) await note($, `lean prune: handoff not saved (${d.error})`)
+      await wait($, 2000)
+    }
+  } catch (err) {
+    await note($, `lean prune failed: ${String(err)}`)
+  } finally {
+    leaning = false
   }
 }
 
@@ -162,9 +220,21 @@ async function poll($: Api) {
     phase = 'idle'
     await update($, pruning, () => null)
   }
-  if (req && !req.handled && phase === 'idle' && !busy) {
+  if (req && !req.handled && phase === 'idle' && !busy && !leaning) {
     await $.fs.write(reqPath(selfId), JSON.stringify({ ...req, handled: now }))
-    await note($, 'prune request picked up; submitting prune prompt')
+    // lean (compact only) unless a subagent was active lately: asking it for a handoff takes a model turn
+    let prep: any = null
+    try {
+      prep = JSON.parse((await $.process.run([PY, script('leanprune.py'), 'prep', '--session', selfId],
+        { timeoutMs: 20_000 })).stdout)
+    } catch {}
+    if (prep?.lean) {
+      await note($, 'prune request picked up; lean prune (no warm subagents)')
+      void leanPrune($, selfId, prep.handoffs)
+      return
+    }
+    await note($, prep ? `prune request picked up; full prune (${prep.warm.length} warm subagent(s))`
+      : 'prune request picked up; leanprune prep failed, full prune')
     // the model reads the whole context before anything shows: say at once that a prune is underway
     await update($, pruning, () => 'handoff')
     $.ui.toast('Bonsai: pruning. Writing the handoff, then compacting.')

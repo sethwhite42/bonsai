@@ -20,7 +20,9 @@ A prune is spotted by `<command-name>/prune` or `/bonsai-context:prune`, by
 Bonsai's own unattended prompt ("Run the bonsai-context:prune skill ..."), by
 the prune skill's "Base directory for this skill: ...skills/prune" text, or by
 a Skill tool call naming it. The handoff turns run from the first of these
-(after the last ordinary human prompt) to the boundary.
+(after the last ordinary human prompt) to the boundary. A lean prune (the compact
+writes the handoff; no handoff turns) is spotted by its line in lean-prunes.jsonl,
+which leanprune.py writes.
 
 Corrections (v2; ctxstudy.py found v1 overstated savings):
   reread    Read calls in the window whose (path lowercased with \\ separators,
@@ -56,7 +58,24 @@ from datetime import datetime
 from common import PROJECTS as ROOT, STATE
 
 LEDGER = os.path.join(STATE, "prunestats.json")
-VERSION = 2
+VERSION = 4   # 3: cost split into run_cost / prune_cost (+ prune_calls, prune_out); 4: lean prunes
+LEAN = os.path.join(STATE, "lean-prunes.jsonl")
+
+
+def lean_times():
+    """{session id: [epoch s of each lean prune's summary]} from leanprune.py's log."""
+    out = {}
+    try:
+        with open(LEAN, encoding="utf-8") as f:
+            for ln in f:
+                try:
+                    r = json.loads(ln)
+                    out.setdefault(r["session"], []).append(ts(r["at"]))
+                except Exception:
+                    pass
+    except OSError:
+        pass
+    return out
 W_IN, W_READ, W_WRITE, W_OUT = 1, 0.1, 2, 5
 IMG = 1600
 SKILL_PRUNE_RE = re.compile(r"^Base directory for this skill: \S*?skills[\\/]prune\b")
@@ -190,6 +209,7 @@ def analyse(path, ttl_s, limit):
     session_dir = path[:-6]
     res_tok = {e[2]: e[3] for e in ev if e[0] == "result"}
     out = []
+    leans = lean_times().get(os.path.basename(session_dir), [])
     idx = [i for i, e in enumerate(ev) if e[0] == "compact"]
     for n, i in enumerate(idx):
         rec = ev[i][2]
@@ -213,7 +233,10 @@ def analyse(path, ttl_s, limit):
                 prune_at = k
             elif e[0] == "prompt" and not e[2]["prune"] and prune_at is not None:
                 break
-        prune_cost = sum(weighted(e[2]) for e in seg_before[prune_at:] if e[0] == "turn") if prune_at is not None else 0
+        prune_turns = [e for e in seg_before[prune_at:] if e[0] == "turn"] if prune_at is not None else []
+        lean = prune_at is None and any(abs(x - t0) < 300 for x in leans)
+        prune_cost = sum(weighted(e[2]) for e in prune_turns)
+        prune_out = sum(W_OUT * (e[2].get("output_tokens") or 0) for e in prune_turns)
         before = ev[:i]
         prev_turn_t = next((e[1] for e in reversed(before) if e[0] == "turn"), t0)
 
@@ -277,11 +300,13 @@ def analyse(path, ttl_s, limit):
             "session": os.path.basename(session_dir), "file": path, "uuid": rec.get("uuid"),
             "when": datetime.fromtimestamp(t0).strftime("%Y-%m-%d %H:%M"),
             "trigger": (rec.get("compactMetadata") or {}).get("trigger"),
-            "via_prune": prune_at is not None, "pre": pre, "post": post, "removed": removed,
+            "via_prune": prune_at is not None or lean, "lean": lean, "pre": pre, "post": post, "removed": removed,
             "turns_after": k + 1, "open": end == len(ev),
             "actual_after": round(actual), "saved": round(saved),
             "reread": round(reread), "reorient": round(reorient),
             "cost": round(cost), "cost_measured": actual_run,
+            "run_cost": round(run_cost), "prune_cost": round(prune_cost),
+            "prune_calls": len(prune_turns), "prune_out": round(prune_out),
             "net": round(saved - cost),
         })
     return out

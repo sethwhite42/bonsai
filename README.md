@@ -26,13 +26,17 @@ Bonsai watches every session on your machine and prunes the big ones at the righ
 
 ### What "Prune" does
 
-1. Claude writes `~/.claude/handoffs/<task>.md`. It holds the goal, the current state, decisions and why, exact values, and next steps, in enough detail that a fresh model can continue without re-reading files.
+Usually it's one step, a **lean prune**: the session is compacted with the handoff standard as the compact's instructions, so the summary *is* the handoff. It holds the goal, the current state, decisions and why, exact values, and next steps, in enough detail that a fresh model can continue without re-reading files. Bonsai then copies the summary to `~/.claude/handoffs/<task>.md`, with no model call. The compact already reads the whole context from the cache, so writing the handoff there saves the separate handoff turn: about 40% of a prune's cost in a measured prune.
+
+When a subagent of the session was active in the last 45 minutes, Bonsai does a **full prune** instead, because only a model turn can ask a subagent for its handoff:
+
+1. Claude writes `~/.claude/handoffs/<task>.md`.
 2. For each subagent: if its cache is still warm and it holds unfinished work, Claude asks it to write its own handoff. Cold subagents are never woken, because waking one re-sends its whole context at full price.
 3. The session is compacted, with instructions to read the handoff first.
 
 ## When a prune pays
 
-A prune isn't free. The handoff turn re-reads the whole context a few times, and the compact re-reads it again, so a prune costs about one context's worth of tokens. What it saves is the part it removes, on every later call. Bonsai works this out for each session, so the threshold floats instead of being a fixed size:
+A prune isn't free. The compact re-reads the whole context, the context left afterwards has to be cached again, and a full prune's handoff turn re-reads the context a few more times, so a full prune costs about one context's worth of tokens. What it saves is the part it removes, on every later call. Bonsai works this out for each session, so the threshold floats instead of being a fixed size:
 
 - **Removable** = context − what's left after a compact (the system prompt, tools, memory and summary: about 80k, or this session's own figure once it has been compacted).
 - **Cost** = a straight-line fit of the prunes measured in your own savings ledger (about 0.7 × context + 80k until there are enough).
@@ -84,6 +88,7 @@ Where idle time can't be read, only the cache-expiry trigger prunes.
   - `panelview.py`: builds the panel and decides whether auto-prune should act. It runs every 30 seconds in each session where Bonsai is loaded.
   - `cachecheck.py`: lists warm sessions. It's run by `panelview.py`, and by the prune skill to see which subagents are still warm.
   - `growth.py`: keeps a running record of what grew this session's context, reading only what the transcript gained since the last refresh. It's run by `panelview.py`.
+  - `leanprune.py`: checks for recently active subagents before a prune, and after a lean prune copies the compact's summary from the transcript to the handoff file.
   - `econ.py`: works out whether a prune pays off now (see [When a prune pays](#when-a-prune-pays)). It's run by `panelview.py`.
   - `prunestats.py`: estimates savings for the panel's Savings line. It's run in the background about once an hour.
   - `ctxstudy.py`: an optional report you can run yourself (`python ctxstudy.py`) on what grows context across all your sessions, and what happens after each compact. Bonsai never runs it.
@@ -91,15 +96,15 @@ Where idle time can't be read, only the cache-expiry trigger prunes.
 
 **Hooks:** none on your prompts or tool calls. Bonsai never adds text to what you send Claude. The nudge bar, the panel and the footer button are drawn by its hooks module.
 
-**Commands it runs in your session:** when a prune happens (you click Prune, or auto-prune fires once you've switched it on), Bonsai:
+**Commands it runs in your session:** when a prune happens (you click Prune, or auto-prune fires once you've switched it on), Bonsai runs `/compact` with the handoff standard as its instructions (a lean prune). For a full prune it instead:
 1. submits a prompt telling Claude to run the `bonsai-context:prune` skill unattended. It asks Claude to write the handoff file without asking questions, to end with the handoff path, and says the session will be compacted next.
 2. runs `/compact` once that turn ends, with instructions to keep the handoff path in the summary and read it first.
 
 It never runs anything else in your sessions.
 
 **Writes** only to these places:
-- `~/.claude/hooks-state/`: `bonsai-prefs.json` (your panel settings), `bonsai-live-<session>.json` (a heartbeat showing Bonsai is running in that session), `bonsai-log-<session>.log` (a step log), `prune-request-<session>.json` (prune requests between sessions), `bonsai-growth-<session>.json` (what grew that session's context), `ctxnudge-<session>.json` (where you last dismissed the nudge bar), `prunestats.json` (the savings ledger) and `prunestats-refresh.stamp` (when savings were last updated).
-- `~/.claude/handoffs/`: the handoff files Claude writes during a prune.
+- `~/.claude/hooks-state/`: `bonsai-prefs.json` (your panel settings), `bonsai-live-<session>.json` (a heartbeat showing Bonsai is running in that session), `bonsai-log-<session>.log` (a step log), `prune-request-<session>.json` (prune requests between sessions), `bonsai-growth-<session>.json` (what grew that session's context), `ctxnudge-<session>.json` (where you last dismissed the nudge bar), `lean-prunes.jsonl` (a line per lean prune, for the savings ledger), `prunestats.json` (the savings ledger) and `prunestats-refresh.stamp` (when savings were last updated).
+- `~/.claude/handoffs/`: the handoff files written during a prune.
 
 It never edits Claude Code's settings, permissions, instructions or any project files.
 
