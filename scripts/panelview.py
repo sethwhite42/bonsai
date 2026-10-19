@@ -6,7 +6,7 @@ and draws the blocks this prints. Edit THIS file to change the panel's content o
 layout in every session at once, with no plugin reload.
 
 Output: {"blocks": [Block, ...], "layout": {}, "footer": {}, "autoPruneSelf": bool,
-         "nudge": {"ctx": int, "parts": [Part]} | null}   (the bar above the prompt)
+         "nudge": {"ctx": int, "parts": [Part]} | null}   (the bar above the prompt, once a prune pays)
   Block = {"kind": "line", "parts": [Part]}
         | {"kind": "gap"}
         | {"kind": "box", "color": <theme color>, "children": [Block],
@@ -31,12 +31,13 @@ import argparse, json, os, subprocess, sys, time
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-from common import STATE, FIRST, STEP, pc_idle_s
+from common import STATE, STEP, pc_idle_s
+import econ, growth
 LIVE_S = 20                           # heartbeat age that still counts as open
 SOON = 0.25                           # "going cold" = under this share of the TTL
 AUTO_MIN = 10                         # auto-prune when this many cache minutes or fewer are left
-AUTO_CTX = FIRST                      # ...and the context is at least this big
-CTX_CHOICES = [100_000, 150_000, 200_000, 250_000, 300_000, 400_000, 500_000]   # panel dropdowns
+AUTO_CTX = 0                          # ...and the context is at least this big (0 = when a prune pays, econ.py)
+CTX_CHOICES = [0, 100_000, 150_000, 200_000, 250_000, 300_000, 400_000, 500_000]   # panel dropdowns
 MIN_CHOICES = [5, 10, 15, 20]
 IDLE_MIN = 10                         # idle prune: no keyboard/mouse for this long (0 = off)
 IDLE_CHOICES = [0, 5, 10, 15, 20, 30]
@@ -80,11 +81,12 @@ def bar(frac, width, color):
     return [P("█" * filled, color=color), P("░" * (width - filled), dim=True)]
 
 
-def next_nudge(sid, ctx):
+def dismissed_at(sid, ctx):
+    """Context at the last Dismiss of the nudge bar (0 = none, or a compact since)."""
     last = (read_json(os.path.join(STATE, f"ctxnudge-{sid}.json")) or {}).get("last", 0)
     if last and ctx is not None and ctx >= 0 and ctx < last - STEP:
         last = 0
-    return last + STEP if last else FIRST
+    return last
 
 
 def last_log_line(sid):
@@ -98,14 +100,6 @@ def last_log_line(sid):
         return msg if age < 3600 else None   # hide stale prune status after an hour
     except Exception:
         return None
-
-
-def ctx_text(ctx):
-    if ctx == -1:
-        return P("compacted", dim=True)
-    if not ctx:
-        return P("    ?", dim=True)
-    return P(k(ctx).rjust(5), color="warning", bold=True) if ctx >= FIRST else P(k(ctx).rjust(5))
 
 
 def savings():
@@ -196,8 +190,27 @@ def main():
 
     me = next((s for s in sessions if s["sid"] == a.me), None)
     ctx = me["ctx"] if me else None
-    nudge = next_nudge(a.me, ctx)
-    near = ctx is not None and ctx > 0 and ctx >= nudge - 15_000
+    # the floating threshold: does a prune pay off for this session now? (econ.py)
+    fit = econ.ledger_fit()
+    try:
+        g = growth.update(a.me) if a.me else None
+    except Exception:
+        g = None
+    ec = econ.case(ctx if ctx and ctx > 0 else 0, g, fit)
+    pay_at = ec["at"] or 0
+    near = bool(ctx and ctx > 0 and pay_at and ctx >= pay_at - 15_000)
+
+    def pays(s, cold=False):
+        """Whether auto-prune (and Prune all) should take session s: over the chosen size or,
+        set to "when it pays", by the economics of its own growth record."""
+        c = s["ctx"]
+        if not c or c <= 0:
+            return False
+        if AUTO_CTX:
+            return c >= AUTO_CTX
+        x = ec if s["sid"] == a.me else econ.case(c, growth.peek(s["sid"]), fit)
+        return x["cold"] if cold else x["warm"]
+    over = f"over {k(AUTO_CTX)}" if AUTO_CTX else "where a prune pays"
     cut = ttl * SOON
     soon = [s for s in sessions if s["left"] < cut]
     st = last_log_line(a.me)
@@ -209,11 +222,11 @@ def main():
     #    so a break gets used for housekeeping instead of interrupting work. The quiet check
     #    keeps a session driven from the phone (Remote Control) from qualifying.
     auto_self, auto_reason = False, ""
-    if auto and me and a.me not in excluded and me["left"] > 0 and ctx and ctx >= AUTO_CTX:
+    if auto and me and a.me not in excluded and me["left"] > 0 and ctx:
         quiet_min = ttl - me["left"]
-        if me["left"] <= AUTO_MIN:
+        if me["left"] <= AUTO_MIN and pays(me, cold=True):
             auto_reason = "cache nearly expired"
-        elif pc_idle and quiet_min >= idle_min:
+        elif pc_idle and quiet_min >= idle_min and pays(me):
             auto_reason = f"PC idle {int(idle_s // 60)} min"
         if auto_reason:
             req = read_json(os.path.join(STATE, f"prune-request-{a.me}.json")) or {}
@@ -230,7 +243,7 @@ def main():
     # ── 1. auto-prune: the headline feature ─────────────────────────────────
     # sessions an outside program drives (claude -p) are shown but never pruned: no plugin runs
     # between that program's calls to take the request, so their context is the program's job
-    big = sorted((s for s in sessions if s["ctx"] and s["ctx"] >= AUTO_CTX and not s.get("external")
+    big = sorted((s for s in sessions if pays(s, cold=s["left"] <= AUTO_MIN) and not s.get("external")
                   and s["sid"] not in excluded),
                  key=lambda s: s["left"])
     if not auto:
@@ -242,7 +255,7 @@ def main():
         nxt = kv("Next", P(short(s["title"], 22), bold=True),
                  P(when, color=ACCENT if wait else WARN))
     else:
-        nxt = line(P(f"Nothing to do: no warm session is over {k(AUTO_CTX)}.", dim=True))
+        nxt = line(P(f"Nothing to do: no warm session {over}.", dim=True))
     blocks.append({"kind": "box", "color": ACCENT if auto else BORDER, "gap": 1,
                    "title": [P("⟳ Auto-prune", bold=True, color=ACCENT if auto else None)],
                    # the ON/OFF chip in the title row is the toggle itself
@@ -251,7 +264,8 @@ def main():
                        line(P("Big sessions hand off and compact on their own when they sit idle.", dim=True)),
                        {"kind": "row", "children": [
                            {"kind": "select", "pref": "autoCtx", "label": "Over", "value": AUTO_CTX,
-                            "numeric": True, "options": [{"value": v, "label": k(v)} for v in CTX_CHOICES]},
+                            "numeric": True, "options": [{"value": v, "label": k(v) if v else "when it pays"}
+                                                         for v in CTX_CHOICES]},
                            {"kind": "select", "pref": "autoMin", "label": "at", "value": AUTO_MIN,
                             "numeric": True, "options": [{"value": v, "label": f"{v} min left"} for v in MIN_CHOICES]},
                        ]},
@@ -266,10 +280,32 @@ def main():
     # ── 2. this session ─────────────────────────────────────────────────────
     me_children = []
     if ctx and ctx > 0:
-        me_children += [kv("Context", P(k(ctx), bold=True, color=WARN if near else None),
-                           P(f"  of {k(nudge)} nudge", dim=True)),
-                        meter(ctx / nudge, WARN if near else ACCENT,
-                              [P(f"{round(100 * ctx / nudge)}%", dim=True)])]
+        me_children.append(kv("Context", P(k(ctx), bold=True, color=WARN if near else None),
+                              P(f"  prune pays from ~{k(pay_at)}" if pay_at else "", dim=True)))
+        if pay_at:
+            me_children.append(meter(ctx / pay_at, WARN if near else ACCENT,
+                                     [P(f"{round(100 * ctx / pay_at)}%", dim=True)]))
+        if ec["warm"]:
+            me_children.append(kv("Prune", P(f"pays off after ~{round(ec['breakeven'])} calls", bold=True),
+                                  P(f"  (frees {k(ec['removable'])})", dim=True)))
+        elif ec["why"] and ec["removable"]:
+            me_children.append(kv("Prune", P(f"not yet: {ec['why']}", dim=True)))
+        if g and g["seg"]["calls"] > 1:
+            cats, grown = growth.top_cats(g)
+            if cats:
+                parts = [P(f"+{k(grown)}", bold=True), P("  ")]
+                for i, (name, _, frac) in enumerate(cats):
+                    parts += [P(" · " if i else "", dim=True), P(name), P(f" {round(100 * frac)}%", dim=True)]
+                me_children.append(kv("Grown by", *parts))
+            big_j = g["seg"].get("big")
+            if big_j and big_j["tok"] >= 10_000:
+                me_children.append(kv("Biggest", P(f"+{k(big_j['tok'])}", bold=True),
+                                      P(f"  {growth.LABEL.get(big_j['cat'], big_j['cat'])}, "
+                                        f"{time.strftime('%H:%M', time.localtime(big_j['t']))}", dim=True)))
+            sp = growth.sparkline(g, 24)
+            if sp:
+                me_children.append(kv("Trend", P(sp, color=ACCENT),
+                                      P("  since the last compact" if g["compacts"] else "  this session", dim=True)))
     else:
         me_children.append(kv("Context", P("compacted" if ctx == -1 else "unknown", bold=True)))
     if me:
@@ -295,8 +331,9 @@ def main():
         action = ("app-managed" if s.get("external") else
                   "pruning" if req and not req.get("handled") else ("prune" if live else "not open"))
         c = s["ctx"]
+        hot = pays(s)
         ctxp = (P("compacted", dim=True) if c == -1 else P("?", dim=True) if not c
-                else P(k(c), bold=c >= AUTO_CTX, color=WARN if c >= AUTO_CTX else None))
+                else P(k(c), bold=hot, color=WARN if hot else None))
         hue = cache_hue(left, ttl)
         label = [P(f"{left} min", bold=cold, color=hue if cold else None, dim=not cold)]
         if mine:
@@ -323,7 +360,7 @@ def main():
     head = []
     if pending:
         head = [{"kind": "pruneAll", "label": f"Prune all ({len(pending)})", "sids": pending,
-                 "parts": [P(f"every open session over {k(AUTO_CTX)}", dim=True)]}]
+                 "parts": [P(f"every open session {over}", dim=True)]}]
     blocks.append({"kind": "box", "color": BORDER, "gap": 1,
                    "title": [P("Warm sessions", bold=True)],
                    "titleRight": ([P(f"⚠ {len(soon)} going cold", bold=True, color=WARN)] if soon
@@ -361,12 +398,14 @@ def main():
             for key, v in BOX_PAD.items():
                 b.setdefault(key, v)
     # ── the nudge bar above the prompt: this session crossed its next checkpoint ──
-    # (FIRST, then every STEP past the last Dismiss). The plugin draws Prune / Dismiss
-    # beside these parts; Dismiss writes {"last": ctx} to ctxnudge-<sid>.json.
+    # (once a prune pays off, econ.py; after a Dismiss, again STEP further on). The plugin draws
+    # Prune / Dismiss beside these parts; Dismiss writes {"last": ctx} to ctxnudge-<sid>.json.
     nudge_bar = None
-    if ctx and ctx >= FIRST and ctx >= nudge and not auto_self:
+    last = dismissed_at(a.me, ctx)
+    if ctx and ec["warm"] and (not last or ctx >= last + STEP) and not auto_self:
         bar_parts = [P("Bonsai", bold=True, color=ACCENT), P("  "), P(k(ctx), bold=True, color=WARN),
-                     P(" context, re-read every turn", dim=True)]
+                     P(" context", dim=True), P("  ·  prune pays off after ", dim=True),
+                     P(f"~{round(ec['breakeven'])} calls", bold=True)]
         if me:
             bar_parts += [P("  ·  cache ", dim=True), P(f"{max(0, int(me['left']))} min", bold=True)]
         if not auto:

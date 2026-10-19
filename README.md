@@ -12,15 +12,15 @@ Bonsai watches every session on your machine and prunes the big ones at the righ
 
 - **A Bonsai button** in the prompt footer, which opens the panel (or use `/bonsai`).
 - **Warm sessions:** every session whose prompt cache is still alive, with minutes left, context size, and a **Prune** button. Sessions about to go cold are flagged.
-- **Auto-prune** (off until you switch it on in the panel): big sessions (over 150k by default) hand off and compact on their own when:
+- **Auto-prune** (off until you switch it on in the panel): sessions where a prune pays off (see [When a prune pays](#when-a-prune-pays)), or over a size you pick, hand off and compact on their own when:
   - you've been away from the keyboard for 10 minutes and the session hasn't replied for 10 minutes, so the break gets used for housekeeping (both clocks run together, so in practice it fires 10–20 minutes after the last reply), or
   - their cache is down to its last 10 minutes and about to expire.
 
-  All three thresholds are dropdowns in the panel. Auto-prune only acts on a session while no turn is running in it.
+  All three settings are dropdowns in the panel. Auto-prune only acts on a session while no turn is running in it.
 - **Exclude:** the ✕ on a row keeps that session out of auto-prune, for a disposable giant task you'd rather not have compacted. the **↺** on an excluded row puts it back. Manual Prune still works on excluded sessions.
-- **This session:** context size against the next nudge, and the cache time left.
-- **Savings:** an estimate of tokens saved by pruning over the last 30 days. It's measured in input-token equivalents, against never compacting at all, so read it as an upper bound.
-- **A context nudge:** past 150k tokens, and every 75k after that, a bar appears above the prompt with the session's context size and cache time, and two buttons. **Prune** writes the handoff and compacts, the same as auto-prune. **Dismiss** hides the bar until the next checkpoint. While any prune of the session runs, the bar reads **Bonsai: pruning…** until the compact is done. The bar is drawn by the plugin, so it costs no tokens.
+- **This session:** context size against the point where a prune starts to pay, how many calls a prune would take to pay off, what grew the context since the last compact (thinking, shell output, file reads, edits, skills and so on), the biggest single jump, a trend line of the context over time, and the cache time left.
+- **Savings:** an estimate of tokens saved by pruning over the last 30 days. It's measured in input-token equivalents, against never compacting at all. It subtracts files read again after a compact and the extra calls of the first prompt afterwards, but still reads best as an upper bound.
+- **A context nudge:** once a prune would pay off, a bar appears above the prompt with the session's context size, how many calls the prune takes to pay off, the cache time, and two buttons. **Prune** writes the handoff and compacts, the same as auto-prune. **Dismiss** hides the bar until the context grows another 75k. While any prune of the session runs, the bar reads **Bonsai: pruning…** until the compact is done. The bar is drawn by the plugin, so it costs no tokens.
 
 - **A prune skill:** `/bonsai-context:prune [task-name]` writes the handoff and gives you the `/compact` line to run.
 
@@ -29,6 +29,18 @@ Bonsai watches every session on your machine and prunes the big ones at the righ
 1. Claude writes `~/.claude/handoffs/<task>.md`. It holds the goal, the current state, decisions and why, exact values, and next steps, in enough detail that a fresh model can continue without re-reading files.
 2. For each subagent: if its cache is still warm and it holds unfinished work, Claude asks it to write its own handoff. Cold subagents are never woken, because waking one re-sends its whole context at full price.
 3. The session is compacted, with instructions to read the handoff first.
+
+## When a prune pays
+
+A prune isn't free. The handoff turn re-reads the whole context a few times, and the compact re-reads it again, so a prune costs about one context's worth of tokens. What it saves is the part it removes, on every later call. Bonsai works this out for each session, so the threshold floats instead of being a fixed size:
+
+- **Removable** = context − what's left after a compact (the system prompt, tools, memory and summary: about 80k, or this session's own figure once it has been compacted).
+- **Cost** = a straight-line fit of the prunes measured in your own savings ledger (about 0.7 × context + 80k until there are enough).
+- **Break-even** = cost ÷ (0.1 × removable), in calls. A prune pays when the session is likely to run longer than that. The estimate of calls still to come is the session's own length so far.
+- **Guards:** at least 100k removable, and at least 60 calls since the last compact. In the author's history, prunes soon after the previous one lost tokens a quarter of the time, and spaced-out ones never did.
+- **Before the cache expires**, the next message would rebuild the whole context at full price, so a prune pays at much smaller sizes. The cache-expiry trigger uses that case.
+
+To pick a fixed size instead, set the panel's **Over** dropdown to one.
 
 ## Results
 
@@ -71,7 +83,10 @@ Where idle time can't be read, only the cache-expiry trigger prunes.
   - `common.py`: finds the state folder and reads idle time.
   - `panelview.py`: builds the panel and decides whether auto-prune should act. It runs every 30 seconds in each session where Bonsai is loaded.
   - `cachecheck.py`: lists warm sessions. It's run by `panelview.py`, and by the prune skill to see which subagents are still warm.
+  - `growth.py`: keeps a running record of what grew this session's context, reading only what the transcript gained since the last refresh. It's run by `panelview.py`.
+  - `econ.py`: works out whether a prune pays off now (see [When a prune pays](#when-a-prune-pays)). It's run by `panelview.py`.
   - `prunestats.py`: estimates savings for the panel's Savings line. It's run in the background about once an hour.
+  - `ctxstudy.py`: an optional report you can run yourself (`python ctxstudy.py`) on what grows context across all your sessions, and what happens after each compact. Bonsai never runs it.
 - **`ioreg`** (macOS) or **`xprintidle`** (Linux), to read how long you've been away from the keyboard. On Windows the same reading comes from the `GetLastInputInfo` system call.
 
 **Hooks:** none on your prompts or tool calls. Bonsai never adds text to what you send Claude. The nudge bar, the panel and the footer button are drawn by its hooks module.
@@ -83,7 +98,7 @@ Where idle time can't be read, only the cache-expiry trigger prunes.
 It never runs anything else in your sessions.
 
 **Writes** only to these places:
-- `~/.claude/hooks-state/`: `bonsai-prefs.json` (your panel settings), `bonsai-live-<session>.json` (a heartbeat showing Bonsai is running in that session), `bonsai-log-<session>.log` (a step log), `prune-request-<session>.json` (prune requests between sessions), `ctxnudge-<session>.json` (where you last dismissed the nudge bar), `prunestats.json` (the savings ledger) and `prunestats-refresh.stamp` (when savings were last updated).
+- `~/.claude/hooks-state/`: `bonsai-prefs.json` (your panel settings), `bonsai-live-<session>.json` (a heartbeat showing Bonsai is running in that session), `bonsai-log-<session>.log` (a step log), `prune-request-<session>.json` (prune requests between sessions), `bonsai-growth-<session>.json` (what grew that session's context), `ctxnudge-<session>.json` (where you last dismissed the nudge bar), `prunestats.json` (the savings ledger) and `prunestats-refresh.stamp` (when savings were last updated).
 - `~/.claude/handoffs/`: the handoff files Claude writes during a prune.
 
 It never edits Claude Code's settings, permissions, instructions or any project files.
