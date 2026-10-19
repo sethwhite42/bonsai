@@ -1,16 +1,3 @@
 {
-  "modules": ["./register.tsx"],
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/ctxnudge.py\" 2>/dev/null || python \"${CLAUDE_PLUGIN_ROOT}/scripts/ctxnudge.py\"",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  }
+  "modules": ["./register.tsx"]
 }

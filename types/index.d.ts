@@ -17,8 +17,12 @@ export type Block =
   | { kind: 'session'; sid: string; parts: Part[]; right: Part[]; action: string; sub: Part[][]; meter?: Meter
       toggle?: { label: string; pref: string; value: unknown } }
 
+// The bar above the prompt once the context crosses a nudge checkpoint
+export type Nudge = { ctx: number; parts: Part[] }
+
 declare module 'claude-code' {
   interface PluginState {
-    'bonsai-context': { view: Block[]; layout: Record<string, number>; footer: Record<string, any>; armed: string | null }
+    'bonsai-context': { view: Block[]; layout: Record<string, number>; footer: Record<string, any>; armed: string | null
+      nudge: Nudge | null }
   }
 }

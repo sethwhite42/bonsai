@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register, Api } from 'claude-code'
 
-import type { Block, Meter, Part } from '../types'
+import type { Block, Meter, Nudge, Part } from '../types'
 
 // A generic drawer + prune listener. WHAT the pane shows comes from
 // scripts/panelview.py (edit that: every session picks it up on its next
@@ -54,9 +54,11 @@ const view = atom({ plugin: 'bonsai-context', key: 'view' } as const, [])
 const layout = atom({ plugin: 'bonsai-context', key: 'layout' } as const, {})
 const footer = atom({ plugin: 'bonsai-context', key: 'footer' } as const, {})
 const armed = atom({ plugin: 'bonsai-context', key: 'armed' } as const, null)
+const nudge = atom({ plugin: 'bonsai-context', key: 'nudge' } as const, null as Nudge | null)
 
 let phase: 'idle' | 'running' = 'idle'
 let footerLogged = false
+let nudgePruned = false // Prune pressed on the nudge bar
 let busy = false // a turn is running in this session
 let phaseAt = 0 // a prune that never reached turn.complete must not block later ones
 const STUCK_MS = 15 * 60_000
@@ -64,6 +66,7 @@ const STUCK_MS = 15 * 60_000
 const reqPath = (sid: string) => `${STATE_DIR}/prune-request-${sid}.json`
 const livePath = (sid: string) => `${STATE_DIR}/bonsai-live-${sid}.json`
 const prefsPath = () => `${STATE_DIR}/bonsai-prefs.json` // shared toggles, e.g. { autoPrune: true }
+const nudgePath = (sid: string) => `${STATE_DIR}/ctxnudge-${sid}.json` // { last: ctx at the last Dismiss }
 
 // The full panel opens on demand as a pop-up (the footer Bonsai button or /bonsai); Esc closes it.
 // columns: the width it asks for when docked (a width the person dragged wins)
@@ -109,6 +112,9 @@ async function refresh($: Api) {
     blocks = d.blocks
     await update($, layout, () => d.layout ?? {})
     await update($, footer, () => d.footer ?? {})
+    // the bar stays down from a Prune press until the compact brings the context under the checkpoint
+    if (!d.nudge) nudgePruned = false
+    await update($, nudge, () => (nudgePruned || phase === 'running' ? null : d.nudge ?? null))
     // panelview.py decides WHEN (big context, and the PC idle or the cache nearly out); we add "no turn running"
     if (d.autoPruneSelf && !busy && phase === 'idle') {
       await $.fs.write(reqPath(selfId), JSON.stringify({ at: await $.clock.now(), auto: true }))
@@ -188,6 +194,42 @@ export const register: Register = on => {
     }
     void refresh($)
     return r
+  })
+
+  // The nudge bar above the prompt: stats on the left, Prune / Dismiss on the right.
+  // panelview.py decides when it shows (a checkpoint crossed and not dismissed). Prune runs the
+  // same handoff + compact as auto-prune; Dismiss hides it until the next checkpoint.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const n = await read($, nudge)
+    if (!n || e.props.hasSurvey) return next(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const prune = async () => {
+      nudgePruned = true
+      await update($, nudge, () => null)
+      await $.fs.write(reqPath(await $.session.id()), JSON.stringify({ at: await $.clock.now(), nudge: true }))
+      await note($, `nudge bar: Prune at ${Math.round(n.ctx / 1000)}k`)
+      void poll($)
+    }
+    const dismiss = async () => {
+      await update($, nudge, () => null)
+      await $.fs.write(nudgePath(await $.session.id()), JSON.stringify({ last: n.ctx }))
+      await note($, `nudge bar: dismissed at ${Math.round(n.ctx / 1000)}k`)
+    }
+    return (
+      <Box justifyContent="space-between" alignItems="center" columnGap={2} paddingX={1}>
+        <Box flexShrink={1}>
+          <Text wrap="truncate-end">
+            {n.parts.map(p => (
+              <Text color={p.color ?? undefined} bold={!!p.bold} dimColor={!!p.dim}>{p.text}</Text>
+            ))}
+          </Text>
+        </Box>
+        <Box gap={1} flexShrink={0}>
+          <Button key="nudge-prune" label="Prune" variant="primary" onPress={prune} />
+          <Button key="nudge-dismiss" label="Dismiss" onPress={dismiss} />
+        </Box>
+      </Box>
+    )
   })
 
   // discreet Cache button at the right of the prompt footer, beside the engine's mode labels

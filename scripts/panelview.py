@@ -5,7 +5,8 @@ The plugin's hooks module (hooks/register.tsx) is a generic drawer: it runs
 and draws the blocks this prints. Edit THIS file to change the panel's content or
 layout in every session at once, with no plugin reload.
 
-Output: {"blocks": [Block, ...], "layout": {}, "footer": {}, "autoPruneSelf": bool}
+Output: {"blocks": [Block, ...], "layout": {}, "footer": {}, "autoPruneSelf": bool,
+         "nudge": {"ctx": int, "parts": [Part]} | null}   (the bar above the prompt)
   Block = {"kind": "line", "parts": [Part]}
         | {"kind": "gap"}
         | {"kind": "box", "color": <theme color>, "children": [Block],
@@ -359,7 +360,21 @@ def main():
         if b["kind"] == "box":
             for key, v in BOX_PAD.items():
                 b.setdefault(key, v)
+    # ── the nudge bar above the prompt: this session crossed its next checkpoint ──
+    # (FIRST, then every STEP past the last Dismiss). The plugin draws Prune / Dismiss
+    # beside these parts; Dismiss writes {"last": ctx} to ctxnudge-<sid>.json.
+    nudge_bar = None
+    if ctx and ctx >= FIRST and ctx >= nudge and not auto_self:
+        bar_parts = [P("Bonsai", bold=True, color=ACCENT), P("  "), P(k(ctx), bold=True, color=WARN),
+                     P(" context, re-read every turn", dim=True)]
+        if me:
+            bar_parts += [P("  ·  cache ", dim=True), P(f"{max(0, int(me['left']))} min", bold=True)]
+        if not auto:
+            bar_parts.append(P("  ·  auto-prune off", dim=True))
+        nudge_bar = {"ctx": ctx, "parts": bar_parts}
+
     print(json.dumps({"blocks": blocks, "layout": LAYOUT, "band": [],   # band: older drawers still read it
+                      "nudge": nudge_bar,
                       "footer": FOOTER, "autoPruneSelf": auto_self,
                       "autoReason": auto_reason}))
 

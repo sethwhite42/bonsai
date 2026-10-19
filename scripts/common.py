@@ -8,7 +8,7 @@ CLAUDE_DIR = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expandu
 PROJECTS = os.path.join(CLAUDE_DIR, "projects")        # session transcripts
 STATE = os.path.join(CLAUDE_DIR, "hooks-state")        # prefs, logs, prune requests, savings ledger
 
-# context-size nudge: first at FIRST tokens, again every STEP more (ctxnudge.py and the panel)
+# context-size nudge: first at FIRST tokens, again every STEP more (the nudge bar and the panel)
 FIRST, STEP = 150_000, 75_000
 
 

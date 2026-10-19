@@ -13,3 +13,14 @@ test('Cache chip draws beside the mode labels', async ($, on) => {
     await ui.unmount()
   }
 })
+
+// The nudge bar stays out of the way until panelview reports a crossed checkpoint (the kit has no
+// Python and can't seed plugin state, so the drawn bar is checked by hand in a live session).
+test('Nudge bar is hidden with no checkpoint crossed', async ($, on) => {
+  on('ui.render', async ($, e) => { const { Text } = $.ui.resolve(e); return <Text>engine band</Text> })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ plugin: 'bonsai-context', surface, component: 'AbovePrompt', props: { hasSurvey: false } as any })
+    expect(await ui.find({ key: 'nudge-prune' })).toBeUndefined()
+    await ui.unmount()
+  }
+})
