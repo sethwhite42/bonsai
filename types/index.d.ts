@@ -19,10 +19,12 @@ export type Block =
 
 // The bar above the prompt once the context crosses a nudge checkpoint
 export type Nudge = { ctx: number; parts: Part[] }
+// a prune of this session underway, shown in the same bar
+export type Pruning = 'handoff' | 'compacting'
 
 declare module 'claude-code' {
   interface PluginState {
     'bonsai-context': { view: Block[]; layout: Record<string, number>; footer: Record<string, any>; armed: string | null
-      nudge: Nudge | null }
+      nudge: Nudge | null; pruning: Pruning | null }
   }
 }

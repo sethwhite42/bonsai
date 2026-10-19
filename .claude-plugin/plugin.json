@@ -1,7 +1,7 @@
 {
   "name": "bonsai-context",
   "displayName": "Bonsai",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Saves tokens, saves time and keeps Claude sharp. Bonsai prunes big sessions while you're away, writing a handoff first so nothing is lost.",
   "author": {
     "name": "sethwhite42",

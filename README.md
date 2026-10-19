@@ -20,7 +20,7 @@ Bonsai watches every session on your machine and prunes the big ones at the righ
 - **Exclude:** the ✕ on a row keeps that session out of auto-prune, for a disposable giant task you'd rather not have compacted. the **↺** on an excluded row puts it back. Manual Prune still works on excluded sessions.
 - **This session:** context size against the next nudge, and the cache time left.
 - **Savings:** an estimate of tokens saved by pruning over the last 30 days. It's measured in input-token equivalents, against never compacting at all, so read it as an upper bound.
-- **A context nudge:** past 150k tokens, and every 75k after that, a bar appears above the prompt with the session's context size and cache time, and two buttons. **Prune** writes the handoff and compacts, the same as auto-prune. **Dismiss** hides the bar until the next checkpoint. The bar is drawn by the plugin, so it costs no tokens.
+- **A context nudge:** past 150k tokens, and every 75k after that, a bar appears above the prompt with the session's context size and cache time, and two buttons. **Prune** writes the handoff and compacts, the same as auto-prune. **Dismiss** hides the bar until the next checkpoint. While any prune of the session runs, the bar reads **Bonsai: pruning…** until the compact is done. The bar is drawn by the plugin, so it costs no tokens.
 
 - **A prune skill:** `/bonsai-context:prune [task-name]` writes the handoff and gives you the `/compact` line to run.
 

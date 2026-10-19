@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register, Api } from 'claude-code'
 
-import type { Block, Meter, Nudge, Part } from '../types'
+import type { Block, Meter, Nudge, Part, Pruning } from '../types'
 
 // A generic drawer + prune listener. WHAT the pane shows comes from
 // scripts/panelview.py (edit that: every session picks it up on its next
@@ -55,6 +55,8 @@ const layout = atom({ plugin: 'bonsai-context', key: 'layout' } as const, {})
 const footer = atom({ plugin: 'bonsai-context', key: 'footer' } as const, {})
 const armed = atom({ plugin: 'bonsai-context', key: 'armed' } as const, null)
 const nudge = atom({ plugin: 'bonsai-context', key: 'nudge' } as const, null as Nudge | null)
+// a prune of this session underway: the bar above the prompt says so until the compact is done
+const pruning = atom({ plugin: 'bonsai-context', key: 'pruning' } as const, null as Pruning | null)
 
 let phase: 'idle' | 'running' = 'idle'
 let footerLogged = false
@@ -129,6 +131,11 @@ async function refresh($: Api) {
 
 async function compact($: Api) {
   await note($, 'compacting')
+  await update($, pruning, () => 'compacting')
+  try { await doCompact($) } finally { await update($, pruning, () => null) }
+}
+
+async function doCompact($: Api) {
   try {
     const r = await $.session.compact({ instructions: COMPACT_INSTRUCTIONS })
     await note($, r?.skip ? 'compact skipped by a hook; run /compact yourself' : 'compacted')
@@ -151,10 +158,16 @@ async function poll($: Api) {
   const now = await $.clock.now()
   await $.fs.write(livePath(selfId), JSON.stringify({ at: now }))
   const req = await readJson($, reqPath(selfId))
-  if (phase === 'running' && now - phaseAt > STUCK_MS) phase = 'idle'
+  if (phase === 'running' && now - phaseAt > STUCK_MS) {
+    phase = 'idle'
+    await update($, pruning, () => null)
+  }
   if (req && !req.handled && phase === 'idle' && !busy) {
     await $.fs.write(reqPath(selfId), JSON.stringify({ ...req, handled: now }))
     await note($, 'prune request picked up; submitting prune prompt')
+    // the model reads the whole context before anything shows: say at once that a prune is underway
+    await update($, pruning, () => 'handoff')
+    $.ui.toast('Bonsai: pruning. Writing the handoff, then compacting.')
     // resolves as the prune turn starts, so the next turn.complete is that turn's
     await $.prompt.submit({ text: PRUNE_PROMPT, asUser: true })
     phase = 'running'
@@ -200,8 +213,21 @@ export const register: Register = on => {
   // panelview.py decides when it shows (a checkpoint crossed and not dismissed). Prune runs the
   // same handoff + compact as auto-prune; Dismiss hides it until the next checkpoint.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e)
+    const p = await read($, pruning)
+    if (p) {
+      const { Box, Text } = $.ui.resolve(e)
+      return (
+        <Box paddingX={1}>
+          <Text key="pruning" wrap="truncate-end">
+            <Text color="success" bold>Bonsai: pruning…</Text>
+            <Text dimColor>{p === 'compacting' ? ' compacting the session' : ' writing the handoff, then compacting'}</Text>
+          </Text>
+        </Box>
+      )
+    }
     const n = await read($, nudge)
-    if (!n || e.props.hasSurvey) return next(e)
+    if (!n) return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const prune = async () => {
       nudgePruned = true
