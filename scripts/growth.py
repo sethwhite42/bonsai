@@ -131,6 +131,7 @@ def close_call(s):
 def on_call(s, t, ctx):
     seg = s["seg"]
     s["calls"] += 1
+    s["m_calls"] = s.get("m_calls", 0) + 1   # counted alongside msgs (older states lack both)
     seg["calls"] += 1
     if seg["t0"] is None:
         seg["t0"] = t
@@ -230,6 +231,7 @@ def on_line(s, d):
             add(s["pending"], "notices", n)
         else:
             add(s["pending"], "images" if im else "prompts", n)
+            s["msgs"] = s.get("msgs", 0) + 1   # a message you typed (for calls per message)
         return
     if ty == "attachment":
         a = d.get("attachment") or {}
@@ -280,6 +282,16 @@ def peek(sid):
         return s if s.get("v") == 1 else None
     except Exception:
         return None
+
+
+CALLS_PER_MSG = 5   # across the author's sessions: median 4, mean 7 API calls per typed message
+
+
+def calls_per_msg(s):
+    """This session's API calls per message you typed, once it has a few, else CALLS_PER_MSG."""
+    s = s or {}
+    m = s.get("msgs") or 0
+    return max(1.0, (s.get("m_calls") or 0) / m) if m >= 5 else CALLS_PER_MSG
 
 
 def top_cats(s, n=3):

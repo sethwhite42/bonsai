@@ -298,6 +298,11 @@ def main():
             recent = max(req.get("at", 0), req.get("handled", 0)) / 1000
             auto_self = now - recent > 3600
 
+    def msgs(calls):
+        """break-even calls as messages you'd type, at this session's own calls per message"""
+        n = max(1, round(calls / growth.calls_per_msg(g)))
+        return f"{n} message" + ("" if n == 1 else "s")
+
     def kv(label, *parts):
         if a.blocks >= 2:
             return {"kind": "kv", "label": label, "parts": list(parts)}
@@ -351,8 +356,8 @@ def main():
             me_children.append(meter(ctx / pay_at, WARN if near else ACCENT,
                                      [P(f"{round(100 * ctx / pay_at)}%", dim=True)]))
         if ec["warm"]:
-            me_children.append(kv("Prune", P(f"pays off after ~{round(ec['breakeven'])} calls", bold=True),
-                                  P(f"  (frees {k(ec['removable'])})", dim=True)))
+            me_children.append(kv("Prune", P(f"pays off after ~{msgs(ec['breakeven'])}", bold=True),
+                                  P(f"  (~{round(ec['breakeven'])} calls, frees {k(ec['removable'])})", dim=True)))
         elif ec["why"] and ec["removable"]:
             me_children.append(kv("Prune", P(f"not yet: {ec['why']}", dim=True)))
         if g and g["seg"]["calls"] > 1:
@@ -473,7 +478,7 @@ def main():
     if ctx and ec["warm"] and (not last or ctx >= last + STEP) and not auto_self:
         bar_parts = [P("Bonsai", bold=True, color=ACCENT), P("  "), P(k(ctx), bold=True, color=WARN),
                      P(" context", dim=True), P("  ·  prune pays off after ", dim=True),
-                     P(f"~{round(ec['breakeven'])} calls", bold=True)]
+                     P(f"~{msgs(ec['breakeven'])}", bold=True)]
         if me:
             bar_parts += [P("  ·  cache ", dim=True), P(f"{max(0, int(me['left']))} min", bold=True)]
         if not auto:
