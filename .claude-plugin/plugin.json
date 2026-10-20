@@ -1,7 +1,7 @@
 {
   "name": "bonsai-context",
   "displayName": "Bonsai",
-  "version": "1.5.7",
+  "version": "1.5.8",
   "description": "Compacts your Claude Code sessions at the right moment, so you don't have to: when you step away, before a session's cache goes cold, and as soon as a compact will pay for itself. Writes a handoff first, so nothing is lost.",
   "author": {
     "name": "sethwhite42",

@@ -407,9 +407,6 @@ def main():
     blocks.append({"kind": "box", "color": BORDER, "title": [P("This session", bold=True)],
                    "children": me_children})
 
-    # ── 2b. usage: plan limits and spend per model ──────────────────────────
-    blocks.append(usage_box(kv))
-
     # ── 3. warm sessions, most urgent first ─────────────────────────────────
     def row(s):
         left = max(0, int(s["left"]))
@@ -461,6 +458,9 @@ def main():
                        "title": [P("Excluded", bold=True)],
                        "titleRight": [P("no auto-prune · Prune still works", dim=True)],
                        "children": out_rows})
+
+    # ── 3b. usage: plan limits and spend per model ──────────────────────────
+    blocks.append(usage_box(kv))
 
     # ── 4. savings ──────────────────────────────────────────────────────────
     sv = savings()
