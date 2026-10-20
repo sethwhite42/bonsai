@@ -14,6 +14,8 @@ explains goes to "other". Totals restart at each compaction.
 Saved fields: calls (since session start), seg = {t0, calls, floor, cats, big}
 for the stretch since the last compaction (floor = context right after it),
 series = [[epoch_s, ctx], ...] downsampled to at most SERIES_MAX points.
+lc = the last API call's usage {model, in, out, cr, cw, usd}; turn = the calls since the
+last message you typed {t0, calls, in, out, cr, cw, usd}, not counting lc until it's folded in.
 
 Usage: python growth.py <session-id>   (prints the saved summary)
 """
@@ -21,6 +23,7 @@ import glob, json, os, sys, time
 from datetime import datetime
 
 from common import PROJECTS, STATE
+import prices
 
 IMG = 1600
 SERIES_MAX = 400
@@ -116,6 +119,28 @@ def add(d, k, n):
         d[k] = d.get(k, 0) + n
 
 
+def fold(s):
+    """Add the last call into the turn's totals, once."""
+    lc = s.get("lc")
+    if lc and not lc.get("folded"):
+        t = s.setdefault("turn", {"t0": None, "calls": 0})
+        t["calls"] = t.get("calls", 0) + 1
+        for k in ("in", "out", "cr", "cw", "usd"):
+            t[k] = t.get(k, 0) + lc[k]
+        lc["folded"] = True
+
+
+def turn_total(s):
+    """The calls since your last message, the last call included: {calls, in, out, cr, cw, usd}."""
+    t = dict(s.get("turn") or {"calls": 0})
+    lc = s.get("lc")
+    if lc and not lc.get("folded"):
+        t["calls"] = t.get("calls", 0) + 1
+        for k in ("in", "out", "cr", "cw", "usd"):
+            t[k] = t.get(k, 0) + lc[k]
+    return t
+
+
 def close_call(s):
     """The previous API call's own output becomes pending growth for the next call."""
     c = s["last"]
@@ -198,7 +223,15 @@ def on_line(s, d):
             if m.get("model") and not m["model"].startswith("<"):
                 s["model"] = m["model"]   # the session's current model, for econ.py's prices
             c = s["last"] = {"id": mid, "out": 0, "vis": {}}
+            fold(s)
+            s["lc"] = {"id": mid}
         c["out"] = max(c["out"], u.get("output_tokens") or 0)
+        lc = s.get("lc")
+        if lc and lc.get("id") == mid:   # each content block repeats the usage; keep the latest
+            model = m.get("model") or s.get("model")
+            lc.update(model=model, usd=prices.dollars(model, u), **{"in": u.get("input_tokens") or 0},
+                      out=c["out"], cr=u.get("cache_read_input_tokens") or 0,
+                      cw=u.get("cache_creation_input_tokens") or 0)
         for b in m.get("content") or []:
             if not isinstance(b, dict):
                 continue
@@ -232,6 +265,8 @@ def on_line(s, d):
         else:
             add(s["pending"], "images" if im else "prompts", n)
             s["msgs"] = s.get("msgs", 0) + 1   # a message you typed (for calls per message)
+            fold(s)
+            s["turn"] = {"t0": t, "calls": 0}
         return
     if ty == "attachment":
         a = d.get("attachment") or {}

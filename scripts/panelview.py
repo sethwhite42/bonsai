@@ -72,6 +72,11 @@ def k(n):
     return f"{round(n / 1000)}k"
 
 
+def kn(n):
+    """token count for small numbers too: 850, 2.1k, 245k"""
+    return str(round(n)) if n < 1000 else f"{n / 1000:.1f}k" if n < 10_000 else k(n)
+
+
 def bar(frac, width, color):
     """A filled/empty cell bar, e.g. ██████░░░░."""
     frac = max(0.0, min(1.0, frac))
@@ -378,6 +383,17 @@ def main():
                                       P("  since the last compact" if g["compacts"] else "  this session", dim=True)))
     else:
         me_children.append(kv("Context", P("compacted" if ctx == -1 else "unknown", bold=True)))
+    # what the last call and the calls since your last message cost, at API prices
+    lc = (g or {}).get("lc")
+    if lc and "usd" in lc:
+        me_children.append(kv("Last call", P(money(lc["usd"]), bold=True),
+                              P(f"  read {kn(lc['cr'])} · write {kn(lc['cw'])} · in {kn(lc['in'])} · "
+                                f"out {kn(lc['out'])}", dim=True)))
+        t = growth.turn_total(g)
+        if t.get("calls", 0) > 1:
+            me_children.append(kv("This turn", P(money(t["usd"]), bold=True),
+                                  P(f"  {t['calls']} calls since your last message · "
+                                    f"out {kn(t['out'])}", dim=True)))
     if me:
         left = max(0, int(me["left"]))
         me_children += [kv("Cache", P(f"{left} min", bold=True), P(" left", dim=True)),
