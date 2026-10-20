@@ -383,17 +383,14 @@ def main():
                                       P("  since the last compact" if g["compacts"] else "  this session", dim=True)))
     else:
         me_children.append(kv("Context", P("compacted" if ctx == -1 else "unknown", bold=True)))
-    # what the last call and the calls since your last message cost, at API prices
-    lc = (g or {}).get("lc")
-    if lc and "usd" in lc:
-        me_children.append(kv("Last call", P(money(lc["usd"]), bold=True),
-                              P(f"  read {kn(lc['cr'])} · write {kn(lc['cw'])} · in {kn(lc['in'])} · "
-                                f"out {kn(lc['out'])}", dim=True)))
+    # what the calls since your last message cost, at API prices
+    if (g or {}).get("lc", {}).get("usd") is not None:
         t = growth.turn_total(g)
-        if t.get("calls", 0) > 1:
-            me_children.append(kv("This turn", P(money(t["usd"]), bold=True),
-                                  P(f"  {t['calls']} calls since your last message · "
-                                    f"out {kn(t['out'])}", dim=True)))
+        n = t.get("calls", 0)
+        me_children.append(kv("This turn", P(money(t["usd"]), bold=True),
+                              P(f"  {n} call{'' if n == 1 else 's'} since your last message", dim=True)))
+        me_children.append(kv("Tokens", P(f"read {kn(t['cr'])} · write {kn(t['cw'])} · "
+                                          f"in {kn(t['in'])} · out {kn(t['out'])}", dim=True)))
     if me:
         left = max(0, int(me["left"]))
         me_children += [kv("Cache", P(f"{left} min", bold=True), P(" left", dim=True)),
