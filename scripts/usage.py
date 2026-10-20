@@ -115,10 +115,19 @@ def update():
         else:
             fs[p]["days"] = {d: v for d, v in fs[p]["days"].items() if d >= cutoff}
     c["done"] = done
-    tmp = CACHE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(c, f)
-    os.replace(tmp, CACHE)
+    # every open session's panel runs this every 30 s: a temp file of its own, and losing a save
+    # to another session's (Windows refuses to replace a file another process has open) only
+    # means the next run reads a little more again
+    tmp = f"{CACHE}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(c, f)
+        os.replace(tmp, CACHE)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
     return c, done
 
 
