@@ -194,6 +194,8 @@ def on_line(s, d):
                 return
             close_call(s)
             on_call(s, t, ctx_of(u))
+            if m.get("model") and not m["model"].startswith("<"):
+                s["model"] = m["model"]   # the session's current model, for econ.py's prices
             c = s["last"] = {"id": mid, "out": 0, "vis": {}}
         c["out"] = max(c["out"], u.get("output_tokens") or 0)
         for b in m.get("content") or []:

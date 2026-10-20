@@ -124,6 +124,21 @@ async function note($: Api, msg: string) {
   void refresh($)
 }
 
+// The plan's rate-limit windows (the status line's figures) go to a file panelview.py reads for
+// the Usage box. They're account-wide, so whichever session refreshed last wrote the latest.
+let rlLogged = ''
+async function saveRateLimits($: Api) {
+  try {
+    const u = await $.session.usage()
+    const rl = u.rateLimits ?? []
+    const kinds = rl.map(w => w.kind).join(',') || 'none'
+    if (kinds !== rlLogged) { rlLogged = kinds; await note($, `rate-limit windows: ${kinds}`) }
+    if (rl.length) await $.fs.write(`${STATE_DIR}/bonsai-ratelimits.json`, JSON.stringify({ at: await $.clock.now(), rateLimits: rl }))
+  } catch (err) {
+    if (rlLogged !== 'error') { rlLogged = 'error'; await note($, `session.usage failed: ${String(err)}`) }
+  }
+}
+
 async function refresh($: Api) {
   let blocks: Block[]
   if (!(await isReady($))) {
@@ -131,6 +146,7 @@ async function refresh($: Api) {
       { text: 'Bonsai needs Python 3 on the PATH (python3, python or py).', color: 'error' }] }])
     return
   }
+  await saveRateLimits($)
   try {
     const selfId = await $.session.id()
     // --blocks 2: this drawer knows kv blocks and row gaps (panelview keeps older drawers working)

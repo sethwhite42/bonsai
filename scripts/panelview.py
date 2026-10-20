@@ -32,7 +32,7 @@ from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 from common import STATE, STEP, pc_idle_s
-import econ, growth
+import econ, growth, prices, usage
 LIVE_S = 20                           # heartbeat age that still counts as open
 SOON = 0.25                           # "going cold" = under this share of the TTL
 AUTO_MIN = 10                         # auto-prune when this many cache minutes or fewer are left
@@ -148,6 +148,71 @@ TITLE_CH = 26           # session title, characters, before the ellipsis
 # Spacing, in character cells (the desktop turns a cell into ~8 px across, one line down).
 LAYOUT = {"gap": 1, "padX": 1, "padY": 1, "labelW": 10}   # whole panel: gap between groups, outer margin
 BOX_PAD = {"padX": 2, "padTop": 0.5, "padBottom": 1}   # inside every group box (0.5 = desktop test)
+
+
+RL_NAMES = {"five_hour": "5-hour", "seven_day": "Weekly", "spend_limit": "Spend"}
+
+
+def rl_label(kind):
+    """'seven_day_fable' -> 'Weekly Fable'; unknown kinds keep their own words."""
+    for key, name in RL_NAMES.items():
+        if kind == key:
+            return name
+        if kind.startswith(key + "_"):
+            return f"{name} {kind[len(key) + 1:].replace('_', ' ').title()}"
+    return kind.replace("_", " ").title()
+
+
+def resets(iso):
+    """'14:00' today, 'Tue 14:00' within a week, else the date."""
+    try:
+        t = datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone()
+    except Exception:
+        return ""
+    now = datetime.now().astimezone()
+    if t.date() == now.date():
+        return t.strftime("%H:%M")
+    if (t - now).days < 6:
+        return t.strftime("%a %H:%M")
+    return t.strftime("%b %d")
+
+
+def money(x):
+    return f"${x:,.0f}" if x >= 100 else f"${x:,.2f}"
+
+
+def usage_box(kv):
+    """Plan limits (written by the plugin from Claude Code's own figures) + per-model usage."""
+    kids = []
+    rl = read_json(os.path.join(STATE, "bonsai-ratelimits.json")) or {}
+    fresh = time.time() - (rl.get("at") or 0) / 1000 < 6 * 3600
+    for w in (rl.get("rateLimits") or []) if fresh else []:
+        pct = float(w.get("percentUsed") or 0)
+        hue = WARN if pct >= 80 else ACCENT
+        when = resets(w.get("resetsAt") or "")
+        kids.append(kv(rl_label(str(w.get("kind") or "?")), P(f"{pct:g}%", bold=True, color=WARN if pct >= 80 else None),
+                       P(f"  resets {when}" if when else "", dim=True)))
+        kids.append(meter(pct / 100, hue))
+    try:
+        u = usage.summary()
+    except Exception as e:
+        u = None
+        kids.append(line(P(f"usage scan failed: {e}", color=WARN)))
+    if u:
+        week = sorted(u["week"].items(), key=lambda x: -x[1][5])
+        for model, r in week[:5]:
+            t = u["today"].get(model)
+            kids.append(kv(prices.label(model)[:10],
+                           P(money(t[5]) if t else "$0", bold=True), P(" today", dim=True),
+                           P("  ·  ", dim=True), P(money(r[5])), P(" 7 days", dim=True),
+                           P(f"  ·  {r[0]:,} calls", dim=True)))
+        if week:
+            kids.append(line(P("At API prices, from this PC's transcripts"
+                               + ("" if u["complete"] else " (still counting)"), dim=True)))
+    if not kids:
+        kids.append(line(P("No usage yet.", dim=True)))
+    return {"kind": "box", "color": BORDER, "title": [P("Usage", bold=True)],
+            "titleRight": [P("plan" if fresh and rl.get("rateLimits") else "", dim=True)], "children": kids}
 
 
 def cache_hue(left, ttl):
@@ -320,6 +385,9 @@ def main():
     blocks.append({"kind": "box", "color": BORDER, "title": [P("This session", bold=True)],
                    "children": me_children})
 
+    # ── 2b. usage: plan limits and spend per model ──────────────────────────
+    blocks.append(usage_box(kv))
+
     # ── 3. warm sessions, most urgent first ─────────────────────────────────
     def row(s):
         left = max(0, int(s["left"]))
@@ -390,7 +458,7 @@ def main():
                    "titleRight": [P(f"{SAVINGS_DAYS} days", dim=True)], "children": sv_children})
 
     # ── 5. legend ───────────────────────────────────────────────────────────
-    blocks.append(line(P(f"Prune = handoff, then compact · TTL {int(ttl)} min · {time.strftime('%H:%M')}",
+    blocks.append(line(P(f"Prune = compact, with the handoff in the summary · TTL {int(ttl)} min · {time.strftime('%H:%M')}",
                          dim=True)))
 
     for b in blocks:

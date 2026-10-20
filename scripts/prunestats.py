@@ -39,8 +39,14 @@ Corrections (v2; ctxstudy.py found v1 overstated savings):
             weighted cost of that turn's calls is added to cost. Only the first
             turn: later turns are usually new tasks.
 
-Units are "input-token equivalents": input 1, cache read 0.1, cache write 2
-(1h TTL), output 5. Model-agnostic, so compare as % of the window's spend.
+Units are "input-token equivalents" of the session's model: input 1, cache write 2
+(1h TTL), and cache read and output at that model's own ratios to input (prices.py:
+cache read 0.025 on Fable 5.1, 0.05 on Opus 5.5, 0.1 on Sonnet; output 5). Compare as %
+of the window's spend.
+
+rebuild = the first call after the compaction's cache write: the new context cached again.
+The compaction call, when it isn't in an agent-acompact-* file, is estimated as a read of
+preTokens, a ~6k cache write and a summary of SUMMARY_OUT (lean) or FULL_OUT tokens.
 Results are kept in ~/.claude/hooks-state/prunestats.json so they outlive
 transcript cleanup (30 days by default). Open windows are re-estimated each run;
 rows from an older method version (`v` < 2) are re-estimated whenever their
@@ -56,9 +62,11 @@ import argparse, glob, json, os, re, statistics, sys, time
 from datetime import datetime
 
 from common import PROJECTS as ROOT, STATE
+import prices
 
 LEDGER = os.path.join(STATE, "prunestats.json")
-VERSION = 4   # 3: cost split into run_cost / prune_cost (+ prune_calls, prune_out); 4: lean prunes
+VERSION = 5   # 3: cost split into run_cost / prune_cost (+ prune_calls, prune_out); 4: lean prunes;
+#               5: per-model weights, rebuild, measured-size compaction estimate
 LEAN = os.path.join(STATE, "lean-prunes.jsonl")
 
 
@@ -76,7 +84,8 @@ def lean_times():
     except OSError:
         pass
     return out
-W_IN, W_READ, W_WRITE, W_OUT = 1, 0.1, 2, 5
+W_IN, W_READ, W_WRITE, W_OUT = 1, 0.1, 2, 5   # analyse() sets these per session from prices.py
+COMPACT_WRITE, SUMMARY_OUT, FULL_OUT = 6_000, 8_000, 3_500   # measured 2026-10: 6.4k written, 3.5k out (full)
 IMG = 1600
 SKILL_PRUNE_RE = re.compile(r"^Base directory for this skill: \S*?skills[\\/]prune\b")
 CMD_PRUNE_RE = re.compile(r"<command-name>/(?:bonsai-context:)?prune\b")
@@ -204,7 +213,23 @@ def compaction_run_cost(session_dir, t):
     return None, False
 
 
+def session_model(path):
+    """The model of the session's last main-thread reply."""
+    model = None
+    with open(path, "rb") as f:
+        for raw in f:
+            if b'"model":"claude' in raw and b'"isSidechain":false' in raw:
+                try:
+                    model = (json.loads(raw).get("message") or {}).get("model") or model
+                except Exception:
+                    pass
+    return model
+
+
 def analyse(path, ttl_s, limit):
+    global W_IN, W_READ, W_WRITE, W_OUT
+    model = session_model(path)
+    W_IN, W_READ, W_WRITE, W_OUT = prices.weights(model)
     ev = load(path)
     session_dir = path[:-6]
     res_tok = {e[2]: e[3] for e in ev if e[0] == "result"}
@@ -235,6 +260,7 @@ def analyse(path, ttl_s, limit):
                 break
         prune_turns = [e for e in seg_before[prune_at:] if e[0] == "turn"] if prune_at is not None else []
         lean = prune_at is None and any(abs(x - t0) < 300 for x in leans)
+        out_est = SUMMARY_OUT if lean else FULL_OUT
         prune_cost = sum(weighted(e[2]) for e in prune_turns)
         prune_out = sum(W_OUT * (e[2].get("output_tokens") or 0) for e in prune_turns)
         before = ev[:i]
@@ -244,8 +270,9 @@ def analyse(path, ttl_s, limit):
         post = ctx_of(window[0][2])
         if run_cost is None:   # estimate: re-read pre (cached if warm) + a ~summary-sized output
             warm = (t0 - prev_turn_t) < ttl_s
-            run_cost = pre * (W_READ if warm else W_WRITE) + W_OUT * max(post // 4, 2000)
+            run_cost = pre * (W_READ if warm else W_WRITE) + W_WRITE * COMPACT_WRITE + W_OUT * out_est
         removed = max(pre - post, 0)
+        rebuild = window[0][2].get("cache_creation_input_tokens") or 0
 
         # re-reads: Reads in the window of keys already Read before this compaction (first repeat only)
         pre_reads = {read_key(inp) for e in seg_before if e[0] == "turn" for _, nm, inp in e[3] if nm == "Read"}
@@ -300,13 +327,13 @@ def analyse(path, ttl_s, limit):
             "session": os.path.basename(session_dir), "file": path, "uuid": rec.get("uuid"),
             "when": datetime.fromtimestamp(t0).strftime("%Y-%m-%d %H:%M"),
             "trigger": (rec.get("compactMetadata") or {}).get("trigger"),
-            "via_prune": prune_at is not None or lean, "lean": lean, "pre": pre, "post": post, "removed": removed,
+            "via_prune": prune_at is not None or lean, "lean": lean, "model": model, "pre": pre, "post": post, "removed": removed,
             "turns_after": k + 1, "open": end == len(ev),
             "actual_after": round(actual), "saved": round(saved),
             "reread": round(reread), "reorient": round(reorient),
             "cost": round(cost), "cost_measured": actual_run,
             "run_cost": round(run_cost), "prune_cost": round(prune_cost),
-            "prune_calls": len(prune_turns), "prune_out": round(prune_out),
+            "prune_calls": len(prune_turns), "prune_out": round(prune_out), "rebuild": rebuild,
             "net": round(saved - cost),
         })
     return out
