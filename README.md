@@ -14,6 +14,8 @@ A live panel shows every session's cache time left, context size, and what each 
 
 ![The Bonsai panel](docs/panel.png)
 
+![A session pruning itself: the bar reads "Bonsai: pruning…" while the compact runs](docs/pruning.png)
+
 ## What you get
 
 - **A Bonsai button** in the prompt footer, which opens the panel (or use `/bonsai`).
