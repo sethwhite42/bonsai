@@ -211,8 +211,9 @@ async function leanPrune($: Api, selfId: string, dir: string) {
         { timeoutMs: 20_000 })
       const d = JSON.parse(r.stdout)
       if (d.path) {
-        await note($, `lean prune: handoff saved to ${d.path} (${d.chars} chars)`)
-        $.ui.toast(`Bonsai: pruned. Handoff saved to ${d.path}`)
+        await note($, `lean prune: handoff saved to ${d.path} (${d.chars} chars)${d.warn ? `; ${d.warn}` : ''}`)
+        $.ui.toast(d.warn ? `Bonsai: pruned, but the ${d.warn}. Check ${d.path}`
+                          : `Bonsai: pruned. Handoff saved to ${d.path}`)
         return
       }
       if (i === 5) await note($, `lean prune: handoff not saved (${d.error})`)

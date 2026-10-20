@@ -90,7 +90,7 @@ Where idle time can't be read, only the cache-expiry trigger prunes.
   - `panelview.py`: builds the panel and decides whether auto-prune should act. It runs every 30 seconds in each session where Bonsai is loaded.
   - `cachecheck.py`: lists warm sessions. It's run by `panelview.py`, and by the prune skill to see which subagents are still warm.
   - `growth.py`: keeps a running record of what grew this session's context, reading only what the transcript gained since the last refresh. It's run by `panelview.py`.
-  - `leanprune.py`: checks for recently active subagents before a prune, and after a lean prune copies the compact's summary from the transcript to the handoff file.
+  - `leanprune.py`: checks for recently active subagents before a prune, and after a lean prune copies the compact's summary from the transcript to the handoff file. It warns when the summary doesn't end with its last section (a sign it was cut off), and never overwrites a handoff another session wrote: if two sessions pick the same name, the later one saves to `<task>--<session>.md`.
   - `usage.py` and `prices.py`: the per-model usage in the Usage box, reading only what each transcript gained since the last refresh, and the price table the savings math uses.
   - `econ.py`: works out whether a prune pays off now (see [When a prune pays](#when-a-prune-pays)). It's run by `panelview.py`.
   - `prunestats.py`: estimates savings for the panel's Savings line. It's run in the background about once an hour.

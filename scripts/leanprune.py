@@ -10,7 +10,10 @@ that summary out of the transcript into ~/.claude/handoffs/<task>.md. No model c
       it may hold unfinished work, and only a model turn can ask it for a handoff.
   python leanprune.py save --session SID --since MS   -> {"path": ...} or {"error": ...}
       writes the newest compact summary after MS (epoch ms) to the handoff file, and logs
-      the prune in lean-prunes.jsonl for prunestats.py.
+      the prune in lean-prunes.jsonl for prunestats.py. Adds "warn" when the summary doesn't
+      end in its last section (## Subagents), which is how a cut-off summary looks.
+      Never overwrites another session's handoff: two sessions on the same workstream can
+      pick the same <task> name, so the later one writes <task>--<sid8>.md instead.
 """
 import argparse, glob, json, os, re, sys, time
 from datetime import datetime
@@ -21,6 +24,9 @@ HANDOFFS = os.path.join(CLAUDE_DIR, "handoffs")
 WARM_S = 45 * 60
 LEDGER = os.path.join(STATE, "lean-prunes.jsonl")
 HEAD = "This session is being continued"
+LAST = "## Subagents"   # the template's last section
+OWNER = re.compile(r"<!-- written by Bonsai's lean prune .*?session ([0-9a-f-]{36})")
+STAMP = re.compile(r'"timestamp":"([^"]+)"')
 
 
 def transcript(sid):
@@ -95,6 +101,27 @@ def handoff_path(body, sid):
     return os.path.join(HANDOFFS, f"session-{sid[:8]}.md")
 
 
+def owned_by_other(path, sid, t, since):
+    """True when an existing handoff at `path` belongs to another session: its Bonsai header
+    names another session, or (written by a model turn, no header) this session never wrote it."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            head = f.read(300)
+    except OSError:
+        return False
+    m = OWNER.search(head)
+    if m:
+        return m.group(1) != sid
+    name = os.path.basename(path)
+    with open(t, encoding="utf-8", errors="replace") as f:
+        for ln in f:
+            if name in ln and ('"name":"Write"' in ln or '"name":"Edit"' in ln):
+                st = STAMP.search(ln)
+                if st and ts_ms(st.group(1)) < since:
+                    return False
+    return True
+
+
 def save(sid, since):
     t = transcript(sid)
     if not t:
@@ -105,13 +132,19 @@ def save(sid, since):
     at, text = s
     body = body_of(text)
     path = handoff_path(body, sid)
+    if owned_by_other(path, sid, t, since):
+        path = path[:-3] + f"--{sid[:8]}.md"
     os.makedirs(HANDOFFS, exist_ok=True)
     note = f"<!-- written by Bonsai's lean prune from the compact summary, session {sid}, {at} -->\n\n"
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(note + body + "\n")
     with open(LEDGER, "a", encoding="utf-8") as f:
         f.write(json.dumps({"session": sid, "at": at, "chars": len(body), "path": path}) + "\n")
-    return {"path": path.replace(os.sep, "/"), "chars": len(body)}
+    out = {"path": path.replace(os.sep, "/"), "chars": len(body)}
+    tail = body[body.rfind(LAST):] if LAST in body else ""
+    if len(tail.strip()) <= len(LAST):   # missing, or the heading with nothing under it
+        out["warn"] = "handoff may be cut off: it doesn't end with its Subagents section"
+    return out
 
 
 if __name__ == "__main__":
