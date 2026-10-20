@@ -126,13 +126,11 @@ async function note($: Api, msg: string) {
 
 // The plan's rate-limit windows (the status line's figures) go to a file panelview.py reads for
 // the Usage box. They're account-wide, so whichever session refreshed last wrote the latest.
-let rlLogged = ''
+let rlLogged = ''   // logs a failure once, not every refresh
 async function saveRateLimits($: Api) {
   try {
     const u = await $.session.usage()
     const rl = u.rateLimits ?? []
-    const kinds = rl.map(w => w.kind).join(',') || 'none'
-    if (kinds !== rlLogged) { rlLogged = kinds; await note($, `rate-limit windows: ${kinds}`) }
     if (rl.length) await $.fs.write(`${STATE_DIR}/bonsai-ratelimits.json`, JSON.stringify({ at: await $.clock.now(), rateLimits: rl }))
   } catch (err) {
     if (rlLogged !== 'error') { rlLogged = 'error'; await note($, `session.usage failed: ${String(err)}`) }

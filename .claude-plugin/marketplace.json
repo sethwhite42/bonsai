@@ -1,6 +1,6 @@
 {
   "name": "bonsai",
   "owner": { "name": "sethwhite42", "url": "https://github.com/sethwhite42" },
-  "description": "Bonsai: saves tokens, saves time and keeps Claude sharp",
+  "description": "Compacts your Claude Code sessions at the right moment, so you don't have to: when you step away, before a session's cache goes cold, and as soon as a compact will pay for itself. Writes a handoff first, so nothing is lost.",
   "plugins": [{ "name": "bonsai-context", "source": "./" }]
 }

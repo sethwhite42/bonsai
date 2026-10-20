@@ -1,10 +1,16 @@
 # Bonsai
 
-**Bonsai saves tokens, saves time and keeps Claude sharp — all while you're away — so you never have to think about compacting.**
+<!-- TAGLINE -->
 
-Every turn in Claude Code re-reads the whole conversation, so a session that has grown to 250k tokens costs about 250k tokens a turn, even when most of that is finished work, and all that stale context makes answers less focused. A prompt cache makes those re-reads cheap, but it expires an hour after the last reply. Once it's gone, the next message re-writes the whole context at full price.
+**Bonsai compacts your Claude Code sessions at the right moment, so you don't have to.**
 
-Bonsai watches every session on your machine and prunes the big ones at the right moment. When you step away from the PC, or a session's cache is about to expire, it writes a detailed handoff file and then compacts the session. When you come back, the session resumes from the handoff instead of from a 250k-token transcript.
+Compacting at the right time saves a lot of tokens, but in the middle of work nobody stops to do it, and it's hard to know when the right time is. Bonsai does it for you:
+
+- **While you're away:** when you step away from your PC, big sessions write a detailed handoff and compact, so you come back to a lean session that knows exactly where it left off.
+- **Before the cache goes cold:** when a session you've stopped paying attention to is about to lose its prompt cache, Bonsai compacts it first. Otherwise your next message pays full price to re-send the whole conversation.
+- **During heavy sessions:** it works out the moment a compact will pay for itself, and tells you then or does it for you.
+
+A live panel shows every session's cache time left, context size, and what each turn cost.
 
 ![The Bonsai panel](docs/panel.png)
 
