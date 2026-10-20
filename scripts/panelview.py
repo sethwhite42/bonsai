@@ -393,7 +393,11 @@ def main():
                                           f"in {kn(t['in'])} · out {kn(t['out'])}", dim=True)))
     if me:
         left = max(0, int(me["left"]))
-        me_children += [kv("Cache", P(f"{left} min", bold=True), P(" left", dim=True)),
+        # after a compact the clock runs from the compact, and only the system prompt and tools
+        # are cached: the summary is written fresh on the next message whenever it comes
+        me_children += [kv("Cache", P(f"{left} min", bold=True),
+                           P(" left · since the compact, system prompt and tools only" if ctx == -1
+                             else " left", dim=True)),
                         meter(left / ttl, cache_hue(left, ttl))]
     else:
         me_children.append(kv("Cache", P("cold", bold=True)))

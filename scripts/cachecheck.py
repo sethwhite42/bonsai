@@ -4,7 +4,9 @@ A session's cache expires TTL minutes after its last model call (1h normally,
 5 min once you're in extra usage). The clock is the timestamp of the last
 model reply in the transcript, not the file's mtime: running /cachecheck inside
 a session writes the command to the transcript first, which would otherwise
-look like fresh activity. Subagents have their own clocks.
+look like fresh activity. Subagents have their own clocks. A compact restarts the
+clock: its own call keeps the system prompt and tools warm, while the old conversation's
+cache will never be read again.
 
   python cachecheck.py            sessions active in the last 24h
   python cachecheck.py --ttl 5    if you've gone into extra usage
@@ -79,27 +81,32 @@ def last_call(path):
 
 
 def context_size(path):
-    """Context tokens at the last main-thread reply (input + cache read + cache write)."""
+    """(tokens, compacted_at): context tokens at the last main-thread reply (input + cache read
+    + cache write), or (-1, epoch s) when the session was compacted since that reply. Then the
+    old size no longer applies, and the cache clock restarts at the compact: its own call kept
+    the shared prefix (system prompt, tools) warm, and that prefix is all that's left to lose."""
+    from datetime import datetime
     with open(path, "rb") as f:
         f.seek(0, 2)
         f.seek(max(0, f.tell() - 4_000_000))
         lines = f.read().splitlines()
     for raw in reversed(lines):
-        if b'"compact_boundary"' in raw:
-            return -1   # compacted since its last reply: the old size no longer applies
-        if b'"usage"' not in raw or b'"assistant"' not in raw:
+        boundary = b'"compact_boundary"' in raw
+        if not boundary and (b'"usage"' not in raw or b'"assistant"' not in raw):
             continue
         try:
             d = json.loads(raw)
         except Exception:
             continue
+        if boundary and d.get("subtype") == "compact_boundary":   # not a tool result quoting it
+            return -1, datetime.fromisoformat(d["timestamp"].replace("Z", "+00:00")).timestamp()
         if d.get("type") != "assistant" or d.get("isSidechain"):
             continue
         u = (d.get("message") or {}).get("usage") or {}
         n = sum(u.get(k) or 0 for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
         if n:
-            return n
-    return None
+            return n, None
+    return None, None
 
 
 def status(t):
@@ -121,6 +128,10 @@ def ago(m):
 sessions = [p for p in glob.glob(os.path.join(ROOT, "*", "*.jsonl"))
             if now - os.path.getmtime(p) < a.hours * 3600]
 last = {p: last_call(p) for p in sessions}
+# context size, and the clock restarted by a compact (only files touched within the TTL can be warm)
+ctx = {p: context_size(p) if now - os.path.getmtime(p) < a.ttl * 60 else (None, None) for p in sessions}
+for p in sessions:
+    last[p] = max(last[p], ctx[p][1] or 0)
 sessions.sort(key=last.get, reverse=True)
 
 if a.json:   # for the bonsai mod: warm sessions only
@@ -137,7 +148,7 @@ if a.json:   # for the bonsai mod: warm sessions only
                                "kind": "compaction" if "acompact" in ag else "subagent"})
         t, ext = info(p)
         out.append({"sid": os.path.basename(p)[:-6], "title": t, "left": round(left, 1),
-                    "ctx": context_size(p), "agents": agents, "external": ext})
+                    "ctx": ctx[p][0], "agents": agents, "external": ext})
     print(json.dumps({"ttl": a.ttl, "sessions": out}))
     sys.exit()
 
@@ -148,6 +159,8 @@ if a.warm:
         if left <= 0:
             continue
         line = f"- **{title(p)}**: {left:.0f} min left"
+        if ctx[p][0] == -1:
+            line += " (compacted: only the system prompt and tools are cached)"
         for ag in glob.glob(os.path.join(p[:-6], "subagents", "*.jsonl")):
             aleft = a.ttl - (now - last_call(ag)) / 60
             if aleft > 0:
