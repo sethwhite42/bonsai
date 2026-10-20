@@ -16,6 +16,8 @@ A live panel shows every session's cache time left, context size, and what each 
 
 ![A session pruning itself: the bar reads "Bonsai: pruning…" while the compact runs](docs/pruning.png)
 
+![After the prune: "Compacted session · saved 133.5k tokens", the handoff instructions Bonsai gave the compact, and the panel showing the context down to 109k with the handoff saved](docs/pruned.png)
+
 ## What you get
 
 - **A Bonsai button** in the prompt footer, which opens the panel (or use `/bonsai`).
