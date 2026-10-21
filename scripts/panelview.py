@@ -387,6 +387,8 @@ def main():
     if (g or {}).get("lc", {}).get("usd") is not None:
         t = growth.turn_total(g)
         n = t.get("calls", 0)
+        # just after you type, the turn is reset and has no calls (or totals) yet
+        t = {k: t.get(k, 0) for k in ("calls", "in", "out", "cr", "cw", "usd")}
         me_children.append(kv("This turn", P(money(t["usd"]), bold=True),
                               P(f"  {n} call{'' if n == 1 else 's'} since your last message", dim=True)))
         me_children.append(kv("Tokens", P(f"read {kn(t['cr'])} · write {kn(t['cw'])} · "
